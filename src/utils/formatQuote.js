@@ -3,10 +3,22 @@
  */
 
 export function formatQuoteOnScreen(quote) {
+  if (quote.isDeodorizingOnly) {
+    return {
+      primary: `$${quote.monthlyTotal}`,
+      secondary: 'Billed at time of service',
+    };
+  }
   if (quote.isOnetime) {
     return {
       primary: `$${quote.monthlyTotal}`,
-      secondary: 'One-time cleanup',
+      secondary: 'Billed at time of service',
+    };
+  }
+  if (quote.frequency === 'biweekly') {
+    return {
+      primary: `$${quote.monthlyTotal}/mo`,
+      secondary: 'Bi-weekly service (every other week)',
     };
   }
   return {
@@ -28,9 +40,13 @@ export function formatQuoteSMS(quote, customerName = '') {
     lines.push(
       `One-time cleanup for ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}: $${quote.base}`
     );
+  } else if (quote.frequency === 'biweekly') {
+    lines.push(
+      `Bi-weekly service for ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}: $${quote.monthlyTotal}/month`
+    );
   } else {
     lines.push(
-      `${quote.frequencyLabel} service for ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}: $${quote.weeklyPrice}/week (billed monthly at $${quote.base})`
+      `Weekly service for ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}: $${quote.weeklyPrice}/week (billed monthly at $${quote.base})`
     );
   }
 
@@ -48,6 +64,8 @@ export function formatQuoteSMS(quote, customerName = '') {
 
   if (quote.isOnetime) {
     lines.push(`Total: $${quote.monthlyTotal}`);
+  } else if (quote.frequency === 'biweekly') {
+    lines.push(`Total: $${quote.monthlyTotal}/month`);
   } else {
     lines.push(`Total: $${quote.weeklyPrice}/week ($${quote.monthlyTotal}/month)`);
   }

@@ -8,7 +8,7 @@ export default function Footer() {
       <div className="container-narrow section-padding py-12">
         <div className="grid md:grid-cols-3 gap-10">
           <div>
-            <Image src="/logo.png" alt="Red Top Scoopers" width={100} height={100} className="w-20 h-20 mb-3" />
+            <Image src="/logo.png" alt="Red Top Scoopers" width={100} height={100} className="w-20 h-20 mb-3 rounded-full shadow-md animate-fade-in-down" />
             <p className="font-heading text-xl font-bold text-brand-red tracking-wide">Red Top Scoopers</p>
             <p className="text-gray-400 text-sm mt-1">We Handle the Dirty Work</p>
           </div>

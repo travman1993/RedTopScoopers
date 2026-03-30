@@ -27,6 +27,28 @@ export default function QuoteResult({ quote, customerName, onReset }) {
     }
   };
 
+  // Build the right text message based on service type
+  let smsBody;
+  if (quote.isDeodorizingOnly) {
+    smsBody = `Hi! I got a quote from your website for a $${quote.monthlyTotal} yard deodorizing treatment. I'd like to schedule it.`;
+  } else if (quote.isOnetime) {
+    smsBody = `Hi! I got a quote from your website for a $${quote.monthlyTotal} one-time cleanup. I'd like to get started.`;
+  } else if (quote.frequency === 'biweekly') {
+    smsBody = `Hi! I got a quote from your website for $${quote.monthlyTotal}/month bi-weekly service. I'd like to get started.`;
+  } else {
+    smsBody = `Hi! I got a quote from your website for $${quote.weeklyPrice}/week ($${quote.monthlyTotal}/month). I'd like to get started.`;
+  }
+
+  // Format the total line
+  let totalValue;
+  if (quote.isDeodorizingOnly || quote.isOnetime) {
+    totalValue = `$${quote.monthlyTotal}`;
+  } else if (quote.frequency === 'biweekly') {
+    totalValue = `$${quote.monthlyTotal}/mo`;
+  } else {
+    totalValue = `$${quote.weeklyPrice}/wk ($${quote.monthlyTotal}/mo)`;
+  }
+
   return (
     <section id="quote" className="section-padding bg-gray-50">
       <div className="container-narrow max-w-lg">
@@ -40,28 +62,36 @@ export default function QuoteResult({ quote, customerName, onReset }) {
           <div className="p-6 space-y-3">
             <h3 className="font-heading text-sm uppercase tracking-widest text-gray-400 mb-3">Breakdown</h3>
 
-            <BreakdownRow
-              label={`${quote.frequencyLabel} service — ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}`}
-              value={`$${quote.base}${quote.isOnetime ? '' : '/mo'}`}
-            />
-
-            {quote.yardAddon > 0 && (
-              <BreakdownRow label={`${formatYardSize(quote.yardSize)} yard`} value={`+$${quote.yardAddon}/mo`} />
-            )}
-
-            {quote.deodorizingAddon > 0 && (
+            {quote.isDeodorizingOnly ? (
               <BreakdownRow
-                label="Deodorizing treatment"
-                value={`${quote.isOnetime ? '' : '+'}$${quote.deodorizingAddon}${quote.isOnetime ? '' : '/mo'}`}
+                label={`Deodorizing — ${formatYardSize(quote.yardSize)} yard`}
+                value={`$${quote.deodorizingAddon}`}
               />
+            ) : (
+              <>
+                <BreakdownRow
+                  label={`${quote.frequencyLabel} service — ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}`}
+                  value={`$${quote.base}${quote.isOnetime ? '' : '/mo'}`}
+                />
+
+                {quote.yardAddon > 0 && (
+                  <BreakdownRow
+                    label={`${formatYardSize(quote.yardSize)} yard`}
+                    value={quote.isOnetime ? `+$${quote.yardAddon}` : `+$${quote.yardAddon}/mo`}
+                  />
+                )}
+
+                {quote.deodorizingAddon > 0 && (
+                  <BreakdownRow
+                    label={quote.isOnetime ? 'Deodorizing (one-time)' : 'Deodorizing (monthly)'}
+                    value={quote.isOnetime ? `$${quote.deodorizingAddon}` : `+$${quote.deodorizingAddon}/mo`}
+                  />
+                )}
+              </>
             )}
 
             <div className="border-t border-gray-200 pt-3 mt-3">
-              <BreakdownRow
-                label="Total"
-                value={quote.isOnetime ? `$${quote.monthlyTotal}` : `$${quote.weeklyPrice}/wk ($${quote.monthlyTotal}/mo)`}
-                bold
-              />
+              <BreakdownRow label="Total" value={totalValue} bold />
             </div>
 
             {quote.isHeavyCleanup && (
@@ -71,7 +101,7 @@ export default function QuoteResult({ quote, customerName, onReset }) {
                   <div>
                     <p className="font-semibold text-amber-800 text-sm">Initial Cleanup May Be Required</p>
                     <p className="text-amber-700 text-xs mt-1">
-                      Based on the time since your last cleanup, an initial heavy cleanup fee may apply. 
+                      Based on the time since your last cleanup, an initial heavy cleanup fee may apply.
                       We&apos;ll confirm after reviewing your yard.
                     </p>
                   </div>
@@ -95,10 +125,10 @@ export default function QuoteResult({ quote, customerName, onReset }) {
             </a>
 
             
-              <a href={`sms:4046494654?body=${encodeURIComponent('Hi! I got a quote from your website for $' + quote.monthlyTotal + '/month. I\'d like to get started.')}`}
+              <a href={`sms:4046494654?body=${encodeURIComponent(smsBody)}`}
               className="btn-secondary w-full text-center block"
             >
-              Text Us to Sign Up
+              Text Us to Schedule
             </a>
 
             <div className="grid grid-cols-2 gap-3 pt-2">

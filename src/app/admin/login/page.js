@@ -42,7 +42,7 @@ export default function AdminLogin() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-5">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <Image src="/logo.png" alt="Red Top Scoopers" width={80} height={80} className="mx-auto mb-4" />
+          <Image src="/logo.png" alt="Red Top Scoopers" width={80} height={80} className="mx-auto mb-4 rounded-full shadow-md animate-fade-in-down" />
           <h1 className="font-heading text-2xl font-bold text-gray-900">Admin Login</h1>
           <p className="text-sm text-gray-500">Red Top Scoopers Dashboard</p>
         </div>

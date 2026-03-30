@@ -85,15 +85,26 @@ export default function QuoteForm() {
     );
   }
 
+  const isOnetime = form.frequency === 'onetime';
+  const isDeodorizingOnly = form.frequency === 'deodorizing_only';
+  const isRecurring = form.frequency === 'weekly' || form.frequency === 'biweekly';
+
   return (
-    <section id="quote" className="section-padding bg-gray-50">
-      <div className="container-narrow max-w-2xl">
+      <section id="quote" className="relative section-padding overflow-hidden">
+      {/* Background image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{
+          backgroundImage: `url('https://images.unsplash.com/photo-1558904541-efa843a96f01?w=1920&q=80')`,
+        }}
+      />
+      <div className="absolute inset-0 bg-white/40" />      <div className="relative container-narrow max-w-2xl">
         <div className="text-center mb-10">
           <h2 className="font-heading text-3xl md:text-5xl font-bold text-gray-900 mb-3">
             Get Your Instant Quote
           </h2>
           <p className="text-lg text-gray-600">
-            Get your exact weekly price in seconds.
+            Get your exact price in seconds.
           </p>
         </div>
 
@@ -111,51 +122,76 @@ export default function QuoteForm() {
           <FormField label="Address" name="address" value={form.address} onChange={handleChange} required placeholder="123 Main St, Cartersville, GA" />
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <SelectField label="Number of Dogs" name="dogs" value={form.dogs} onChange={handleChange} options={[
-              { value: '1', label: '1 Dog' },
-              { value: '2', label: '2 Dogs' },
-              { value: '3', label: '3 Dogs' },
-              { value: '4', label: '4 Dogs' },
-              { value: '5', label: '5+ Dogs' },
-            ]} />
+            {!isDeodorizingOnly && (
+              <SelectField label="Number of Dogs" name="dogs" value={form.dogs} onChange={handleChange} options={[
+                { value: '1', label: '1 Dog' },
+                { value: '2', label: '2 Dogs' },
+                { value: '3', label: '3 Dogs' },
+                { value: '4', label: '4 Dogs' },
+                { value: '5', label: '5+ Dogs' },
+              ]} />
+            )}
             <SelectField label="Yard Size" name="yardSize" value={form.yardSize} onChange={handleChange} options={[
               { value: 'small', label: 'Small' },
               { value: 'medium', label: 'Medium' },
               { value: 'large', label: 'Large' },
               { value: 'xl', label: 'Extra Large' },
             ]} />
-            <SelectField label="Frequency" name="frequency" value={form.frequency} onChange={handleChange} options={[
-              { value: 'weekly', label: 'Weekly' },
-              { value: 'biweekly', label: 'Bi-Weekly' },
-              { value: 'onetime', label: 'One-Time' },
+            <SelectField label="Service Type" name="frequency" value={form.frequency} onChange={handleChange} options={[
+              { value: 'weekly', label: 'Weekly Cleanup' },
+              { value: 'biweekly', label: 'Bi-Weekly Cleanup' },
+              { value: 'onetime', label: 'One-Time Cleanup' },
+              { value: 'deodorizing_only', label: 'Deodorizing Only (No Cleanup)' },
             ]} />
           </div>
 
-          <label className="flex items-center gap-3 cursor-pointer group">
-            <input type="checkbox" name="deodorizing" checked={form.deodorizing} onChange={handleChange} className="w-5 h-5 rounded border-gray-300 text-brand-green focus:ring-brand-green cursor-pointer" />
-            <div>
-              <span className="font-semibold text-gray-900 group-hover:text-brand-green transition-colors">Add Deodorizing Treatment</span>
-              <span className="block text-xs text-gray-500">Pet-safe enzyme treatment — eliminates odor</span>
+          {!isDeodorizingOnly && (
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <input type="checkbox" name="deodorizing" checked={form.deodorizing} onChange={handleChange} className="w-5 h-5 rounded border-gray-300 text-brand-green focus:ring-brand-green cursor-pointer" />
+              <div>
+                <span className="font-semibold text-gray-900 group-hover:text-brand-green transition-colors">
+                  Add Deodorizing Treatment
+                </span>
+                <span className="block text-xs text-gray-500">
+                  {isOnetime
+                    ? 'One-time enzyme treatment — $25–$50 based on yard size'
+                    : 'Monthly enzyme treatment — +$5–$20/mo based on yard size'}
+                </span>
+              </div>
+            </label>
+          )}
+
+          {isDeodorizingOnly && (
+            <div className="bg-brand-green-pale border border-brand-green/20 rounded-lg p-4">
+              <p className="text-sm text-brand-green font-semibold">Deodorizing Only Service</p>
+              <p className="text-xs text-gray-600 mt-1">
+                Pet-safe enzyme treatment to eliminate yard odor. No waste cleanup included.
+                Price based on yard size: Small $25 · Medium $30 · Large $40 · XL $50
+              </p>
             </div>
-          </label>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SelectField label="Preferred Service Day" name="preferredDay" value={form.preferredDay} onChange={handleChange} options={[
-              { value: '', label: 'No preference' },
-              { value: 'monday', label: 'Monday' },
-              { value: 'tuesday', label: 'Tuesday' },
-              { value: 'wednesday', label: 'Wednesday' },
-              { value: 'thursday', label: 'Thursday' },
-              { value: 'friday', label: 'Friday' },
-              { value: 'saturday', label: 'Saturday' },
-            ]} />
-            <SelectField label="Last Time Yard Was Cleaned" name="lastCleaned" value={form.lastCleaned} onChange={handleChange} options={[
-              { value: 'within_1_week', label: 'Within 1 week' },
-              { value: '1_2_weeks', label: '1–2 weeks' },
-              { value: '2_4_weeks', label: '2–4 weeks' },
-              { value: 'over_month', label: 'Over a month' },
-              { value: 'not_sure', label: 'Not sure' },
-            ]} />
+            {isRecurring && (
+              <SelectField label="Preferred Service Day" name="preferredDay" value={form.preferredDay} onChange={handleChange} options={[
+                { value: '', label: 'No preference' },
+                { value: 'monday', label: 'Monday' },
+                { value: 'tuesday', label: 'Tuesday' },
+                { value: 'wednesday', label: 'Wednesday' },
+                { value: 'thursday', label: 'Thursday' },
+                { value: 'friday', label: 'Friday' },
+                { value: 'saturday', label: 'Saturday' },
+              ]} />
+            )}
+            {!isDeodorizingOnly && (
+              <SelectField label="Last Time Yard Was Cleaned" name="lastCleaned" value={form.lastCleaned} onChange={handleChange} options={[
+                { value: 'within_1_week', label: 'Within 1 week' },
+                { value: '1_2_weeks', label: '1–2 weeks' },
+                { value: '2_4_weeks', label: '2–4 weeks' },
+                { value: 'over_month', label: 'Over a month' },
+                { value: 'not_sure', label: 'Not sure' },
+              ]} />
+            )}
           </div>
 
           <SelectField label="Where Did You Hear About Us?" name="heardAbout" value={form.heardAbout} onChange={handleChange} options={[

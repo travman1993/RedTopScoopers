@@ -41,32 +41,43 @@ export default function WhyChooseUs() {
   ];
 
   return (
-    <section className="section-padding bg-gray-50">
-      <div className="container-narrow">
-        <div className="text-center mb-12">
-          <h2 className="font-heading text-3xl md:text-5xl font-bold text-gray-900 mb-3">
-            Why Choose Red Top?
-          </h2>
-          <p className="text-lg text-gray-600">
-            We treat your yard like it&apos;s our own.
-          </p>
-        </div>
+    <section className="relative overflow-hidden">
+      {/* Background image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{
+          backgroundImage: `url('https://static.boredpanda.com/blog/wp-content/uploads/2024/11/dogs-poo-pretty-places-673c902aae37f__880.jpg')`,
+        }}
+      />
+      <div className="absolute inset-0 bg-black/60" />
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {features.map((f, i) => (
-            <div
-              key={i}
-              className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300"
-            >
-              <div className="w-14 h-14 rounded-xl bg-brand-green-pale flex items-center justify-center text-brand-green mb-4">
-                {f.icon}
+      <div className="relative section-padding">
+        <div className="container-narrow">
+          <div className="text-center mb-12">
+            <h2 className="font-heading text-3xl md:text-5xl font-bold text-white mb-3">
+              Why Choose Red Top?
+            </h2>
+            <p className="text-lg text-gray-300">
+              We treat your yard like it&apos;s our own.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((f, i) => (
+              <div
+                key={i}
+                className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+              >
+                <div className="w-14 h-14 rounded-xl bg-brand-green-pale flex items-center justify-center text-brand-green mb-4">
+                  {f.icon}
+                </div>
+                <h3 className="font-heading text-lg font-bold text-gray-900 mb-2">
+                  {f.title}
+                </h3>
+                <p className="text-sm text-gray-600 leading-relaxed">{f.desc}</p>
               </div>
-              <h3 className="font-heading text-lg font-bold text-gray-900 mb-2">
-                {f.title}
-              </h3>
-              <p className="text-sm text-gray-600 leading-relaxed">{f.desc}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </section>
