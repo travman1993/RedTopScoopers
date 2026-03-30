@@ -70,7 +70,7 @@ export default function QuoteResult({ quote, customerName, onReset }) {
             ) : (
               <>
                 <BreakdownRow
-                  label={`${quote.frequencyLabel} service — ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}`}
+                  label={`${quote.frequencyLabel} cleanup`}
                   value={`$${quote.base}${quote.isOnetime ? '' : '/mo'}`}
                 />
 
@@ -93,30 +93,6 @@ export default function QuoteResult({ quote, customerName, onReset }) {
             <div className="border-t border-gray-200 pt-3 mt-3">
               <BreakdownRow label="Total" value={totalValue} bold />
             </div>
-
-            {quote.isHeavyCleanup && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-4">
-                <div className="flex items-start gap-2">
-                  <span className="text-amber-500 text-lg">⚠️</span>
-                  <div>
-                    <p className="font-semibold text-amber-800 text-sm">Initial Cleanup May Be Required</p>
-                    <p className="text-amber-700 text-xs mt-1">
-                      Based on the time since your last cleanup, an initial heavy cleanup fee may apply.
-                      We&apos;ll confirm after reviewing your yard.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {quote.isCustomPricing && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-                <p className="font-semibold text-blue-800 text-sm">Custom Pricing</p>
-                <p className="text-blue-700 text-xs mt-1">
-                  For 5+ dogs, we&apos;ll provide a custom quote. We&apos;ll reach out shortly!
-                </p>
-              </div>
-            )}
           </div>
 
           <div className="border-t border-gray-100 p-6 space-y-3">

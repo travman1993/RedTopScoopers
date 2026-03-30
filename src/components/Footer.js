@@ -55,6 +55,8 @@ export default function Footer() {
             <span className="text-xs text-gray-500">Gate Secured</span>
             <span className="text-gray-700">&bull;</span>
             <span className="text-xs text-gray-500">Pet-Safe Deodorizing</span>
+            <span className="text-gray-700">&bull;</span>
+            <a href="/admin" className="text-xs text-gray-600 hover:text-gray-400 transition-colors">Admin</a>
           </div>
         </div>
       </div>

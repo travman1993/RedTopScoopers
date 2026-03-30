@@ -1,31 +1,23 @@
 /**
- * Red Top Scoopers — Pricing Logic
+ * Red Top Scoopers — Simplified Pricing Logic
  * 
- * Base: $90 + ($10 × each extra dog)
- * Bi-weekly: base × 0.75
- * One-time: base × 0.50
- * Weekly display: monthly ÷ 4, rounded to nearest dollar
+ * Base: $95/month flat (weekly service)
+ * Bi-weekly: $95 × 0.75 = $71/month
+ * One-time: $95 × 0.55 = $52
  * 
- * Yard add-ons (monthly): Medium +$5, Large +$15, XL +$20
- * Yard add-ons (one-time): Medium +$10, Large +$20, XL +$30
+ * Yard add-ons: Small included, Medium +$5, Large +$10, XL +$15
  * 
- * Deodorizing only (no cleanup):
- * One-time: Small $25, Medium $30, Large $40, XL $50
- * Monthly add-on: Small $5, Medium $10, Large $15, XL $20
+ * Deodorizing monthly: Small +$5, Medium +$10, Large +$15, XL +$20
+ * Deodorizing one-time: Small $25, Medium $30, Large $40, XL $50
  */
 
-const YARD_ADDON_MONTHLY = {
+const BASE_MONTHLY = 95;
+
+const YARD_ADDON = {
   small: 0,
   medium: 5,
-  large: 15,
-  xl: 20,
-};
-
-const YARD_ADDON_ONETIME = {
-  small: 0,
-  medium: 10,
-  large: 20,
-  xl: 30,
+  large: 10,
+  xl: 15,
 };
 
 const DEODORIZING_MONTHLY = {
@@ -43,18 +35,14 @@ const DEODORIZING_ONETIME = {
 };
 
 export function calculateQuote({
-  dogs = 1,
   yardSize = 'small',
   frequency = 'weekly',
   deodorizing = false,
-  lastCleaned = 'within_1_week',
 }) {
-  const dogCount = Math.min(Math.max(1, dogs), 4);
-  const isCustomPricing = dogs >= 5;
   const isDeodorizingOnly = frequency === 'deodorizing_only';
   const isOnetime = frequency === 'onetime';
 
-  // Deodorizing only — no cleanup involved
+  // Deodorizing only — no cleanup
   if (isDeodorizingOnly) {
     const deodorizingPrice = DEODORIZING_ONETIME[yardSize] || 25;
     return {
@@ -65,35 +53,30 @@ export function calculateQuote({
       weeklyPrice: 0,
       frequency,
       frequencyLabel: 'Deodorizing Only',
-      dogCount,
       yardSize,
       deodorizing: true,
       isHeavyCleanup: false,
-      isCustomPricing: false,
       isOnetime: false,
       isDeodorizingOnly: true,
     };
   }
 
-  // Standard cleanup pricing
-  let base = 90 + (dogCount - 1) * 10;
-
+  // Calculate base price by frequency
+  let base;
   let frequencyLabel = 'Weekly';
+
   if (frequency === 'biweekly') {
-    base = Math.ceil(base * 0.75);
+    base = Math.round(BASE_MONTHLY * 0.75);
     frequencyLabel = 'Bi-Weekly';
   } else if (isOnetime) {
-    base = Math.ceil(base * 0.5);
+    base = Math.round(BASE_MONTHLY * 0.55);
     frequencyLabel = 'One-Time';
+  } else {
+    base = BASE_MONTHLY;
   }
 
-  // Yard add-on — different rates for one-time vs recurring
-  let yardAddon;
-  if (isOnetime) {
-    yardAddon = YARD_ADDON_ONETIME[yardSize] || 0;
-  } else {
-    yardAddon = YARD_ADDON_MONTHLY[yardSize] || 0;
-  }
+  // Yard add-on (same for all frequencies)
+  const yardAddon = YARD_ADDON[yardSize] || 0;
 
   // Deodorizing add-on
   let deodorizingAddon = 0;
@@ -107,7 +90,6 @@ export function calculateQuote({
 
   const monthlyTotal = base + yardAddon + deodorizingAddon;
   const weeklyPrice = Math.round(monthlyTotal / 4);
-  const isHeavyCleanup = lastCleaned === 'over_month' || lastCleaned === 'not_sure';
 
   return {
     base,
@@ -117,11 +99,9 @@ export function calculateQuote({
     weeklyPrice,
     frequency,
     frequencyLabel,
-    dogCount,
     yardSize,
     deodorizing,
-    isHeavyCleanup,
-    isCustomPricing,
+    isHeavyCleanup: false,
     isOnetime,
     isDeodorizingOnly: false,
   };

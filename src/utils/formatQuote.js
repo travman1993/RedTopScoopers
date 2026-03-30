@@ -36,43 +36,44 @@ export function formatQuoteSMS(quote, customerName = '') {
 
   lines.push('');
 
-  if (quote.isOnetime) {
+  if (quote.isDeodorizingOnly) {
     lines.push(
-      `One-time cleanup for ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}: $${quote.base}`
+      `Yard deodorizing treatment (${formatYardLabel(quote.yardSize)} yard): $${quote.monthlyTotal}`
     );
+  } else if (quote.isOnetime) {
+    lines.push(`One-time cleanup: $${quote.base}`);
+    if (quote.yardAddon > 0) {
+      lines.push(`${formatYardLabel(quote.yardSize)} yard: +$${quote.yardAddon}`);
+    }
+    if (quote.deodorizingAddon > 0) {
+      lines.push(`Deodorizing: $${quote.deodorizingAddon}`);
+    }
   } else if (quote.frequency === 'biweekly') {
-    lines.push(
-      `Bi-weekly service for ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}: $${quote.monthlyTotal}/month`
-    );
+    lines.push(`Bi-weekly cleanup: $${quote.base}/mo`);
+    if (quote.yardAddon > 0) {
+      lines.push(`${formatYardLabel(quote.yardSize)} yard: +$${quote.yardAddon}/mo`);
+    }
+    if (quote.deodorizingAddon > 0) {
+      lines.push(`Deodorizing: +$${quote.deodorizingAddon}/mo`);
+    }
   } else {
-    lines.push(
-      `Weekly service for ${quote.dogCount} dog${quote.dogCount > 1 ? 's' : ''}: $${quote.weeklyPrice}/week (billed monthly at $${quote.base})`
-    );
-  }
-
-  if (quote.yardAddon > 0) {
-    lines.push(`${formatYardLabel(quote.yardSize)} yard: +$${quote.yardAddon}/mo`);
-  }
-
-  if (quote.deodorizingAddon > 0) {
-    lines.push(
-      `Deodorizing: ${quote.isOnetime ? '' : '+'}$${quote.deodorizingAddon}${quote.isOnetime ? '' : '/mo'}`
-    );
+    lines.push(`Weekly cleanup: $${quote.weeklyPrice}/week (billed monthly at $${quote.base})`);
+    if (quote.yardAddon > 0) {
+      lines.push(`${formatYardLabel(quote.yardSize)} yard: +$${quote.yardAddon}/mo`);
+    }
+    if (quote.deodorizingAddon > 0) {
+      lines.push(`Deodorizing: +$${quote.deodorizingAddon}/mo`);
+    }
   }
 
   lines.push('');
 
-  if (quote.isOnetime) {
+  if (quote.isDeodorizingOnly || quote.isOnetime) {
     lines.push(`Total: $${quote.monthlyTotal}`);
   } else if (quote.frequency === 'biweekly') {
     lines.push(`Total: $${quote.monthlyTotal}/month`);
   } else {
     lines.push(`Total: $${quote.weeklyPrice}/week ($${quote.monthlyTotal}/month)`);
-  }
-
-  if (quote.isHeavyCleanup) {
-    lines.push('');
-    lines.push('Note: An initial heavy cleanup fee may apply based on yard condition.');
   }
 
   lines.push('');

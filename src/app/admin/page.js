@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const DEMO_LEADS = [
   {
@@ -32,31 +33,79 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('leads');
   const [leads, setLeads] = useState(DEMO_LEADS);
   const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const fetchData = useCallback(async () => {
+    if (!isSupabaseConfigured()) return;
+    setLoading(true);
+    const [leadsRes, customersRes] = await Promise.all([
+      supabase.from('leads').select('*').order('created_at', { ascending: false }),
+      supabase.from('customers').select('*').eq('is_active', true).order('created_at', { ascending: false }),
+    ]);
+    if (leadsRes.data) setLeads(leadsRes.data);
+    if (customersRes.data) setCustomers(customersRes.data);
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
-    if (typeof window !== 'undefined' && !localStorage.getItem('rts_admin')) {
-      router.push('/admin/login');
+    if (typeof window !== 'undefined') {
+      if (!localStorage.getItem('rts_admin')) {
+        router.push('/admin/login');
+        return;
+      }
+      fetchData();
     }
-  }, [router]);
+  }, [router, fetchData]);
 
   const handleLogout = () => {
     localStorage.removeItem('rts_admin');
     router.push('/admin/login');
   };
 
-  const updateLeadStatus = (id, status) => {
-    setLeads((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, status } : l))
-    );
+  const updateLeadStatus = async (id, status) => {
+    // Optimistic local update
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
 
-    if (status === 'approved') {
-      const lead = leads.find((l) => l.id === id);
-      if (lead) {
-        setCustomers((prev) => [
-          ...prev,
-          { ...lead, status: 'active', schedule_day: lead.preferred_day, start_date: new Date().toISOString() },
-        ]);
+    if (isSupabaseConfigured()) {
+      await supabase
+        .from('leads')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (status === 'approved') {
+        const lead = leads.find((l) => l.id === id);
+        if (lead) {
+          await supabase.from('customers').insert([{
+            lead_id: lead.id,
+            first_name: lead.first_name,
+            last_name: lead.last_name,
+            phone: lead.phone,
+            email: lead.email || null,
+            address: lead.address,
+            dogs: lead.dogs,
+            yard_size: lead.yard_size,
+            frequency: lead.frequency,
+            deodorizing: lead.deodorizing,
+            schedule_day: lead.preferred_day || null,
+            monthly_rate: lead.quoted_monthly,
+            weekly_rate: lead.quoted_weekly,
+            start_date: new Date().toISOString().split('T')[0],
+            is_active: true,
+          }]);
+          fetchData();
+        }
+      }
+    } else {
+      // Demo mode: update local state only
+      if (status === 'approved') {
+        const lead = leads.find((l) => l.id === id);
+        if (lead) {
+          setCustomers((prev) => [
+            ...prev,
+            { ...lead, is_active: true, schedule_day: lead.preferred_day, start_date: new Date().toISOString() },
+          ]);
+        }
       }
     }
   };
@@ -75,7 +124,7 @@ export default function AdminDashboard() {
           <Image src="/logo.png" alt="RTS" width={40} height={40} className="w-10 h-10 rounded-full shadow-md animate-fade-in-down" />
           <div>
             <h1 className="font-heading text-lg font-bold text-gray-900 leading-none">Red Top Scoopers</h1>
-            <p className="text-xs text-gray-400">Admin Dashboard</p>
+            <p className="text-xs text-gray-400">{loading ? 'Loading...' : 'Admin Dashboard'}</p>
           </div>
         </div>
         <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-red-500 transition-colors">
@@ -239,8 +288,8 @@ function CustomersTab({ customers }) {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-heading font-bold text-brand-red">${c.quoted_weekly}/wk</p>
-                  <p className="text-xs text-gray-400">${c.quoted_monthly}/mo</p>
+                  <p className="font-heading font-bold text-brand-red">${c.weekly_rate || c.quoted_weekly}/wk</p>
+                  <p className="text-xs text-gray-400">${c.monthly_rate || c.quoted_monthly}/mo</p>
                 </div>
               </div>
             </div>

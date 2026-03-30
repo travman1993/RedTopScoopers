@@ -10,7 +10,6 @@ const INITIAL_FORM = {
   phone: '',
   email: '',
   address: '',
-  dogs: '1',
   yardSize: 'small',
   frequency: 'weekly',
   deodorizing: false,
@@ -39,11 +38,9 @@ export default function QuoteForm() {
     setSubmitting(true);
 
     const result = calculateQuote({
-      dogs: parseInt(form.dogs),
       yardSize: form.yardSize,
       frequency: form.frequency,
       deodorizing: form.deodorizing,
-      lastCleaned: form.lastCleaned,
     });
 
     setQuote(result);
@@ -54,7 +51,7 @@ export default function QuoteForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          dogs: parseInt(form.dogs),
+          dogs: 0,
           quotedMonthly: result.monthlyTotal,
           quotedWeekly: result.weeklyPrice,
           isHeavyCleanup: result.isHeavyCleanup,
@@ -90,15 +87,16 @@ export default function QuoteForm() {
   const isRecurring = form.frequency === 'weekly' || form.frequency === 'biweekly';
 
   return (
-      <section id="quote" className="relative section-padding overflow-hidden">
-      {/* Background image */}
+    <section id="quote" className="relative section-padding overflow-hidden">
       <div
         className="absolute inset-0 bg-cover bg-center"
         style={{
           backgroundImage: `url('https://images.unsplash.com/photo-1558904541-efa843a96f01?w=1920&q=80')`,
         }}
       />
-      <div className="absolute inset-0 bg-white/40" />      <div className="relative container-narrow max-w-2xl">
+      <div className="absolute inset-0 bg-white/90" />
+
+      <div className="relative container-narrow max-w-2xl">
         <div className="text-center mb-10">
           <h2 className="font-heading text-3xl md:text-5xl font-bold text-gray-900 mb-3">
             Get Your Instant Quote
@@ -121,16 +119,7 @@ export default function QuoteForm() {
 
           <FormField label="Address" name="address" value={form.address} onChange={handleChange} required placeholder="123 Main St, Cartersville, GA" />
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {!isDeodorizingOnly && (
-              <SelectField label="Number of Dogs" name="dogs" value={form.dogs} onChange={handleChange} options={[
-                { value: '1', label: '1 Dog' },
-                { value: '2', label: '2 Dogs' },
-                { value: '3', label: '3 Dogs' },
-                { value: '4', label: '4 Dogs' },
-                { value: '5', label: '5+ Dogs' },
-              ]} />
-            )}
+          <div className="grid grid-cols-2 gap-4">
             <SelectField label="Yard Size" name="yardSize" value={form.yardSize} onChange={handleChange} options={[
               { value: 'small', label: 'Small' },
               { value: 'medium', label: 'Medium' },
@@ -141,7 +130,7 @@ export default function QuoteForm() {
               { value: 'weekly', label: 'Weekly Cleanup' },
               { value: 'biweekly', label: 'Bi-Weekly Cleanup' },
               { value: 'onetime', label: 'One-Time Cleanup' },
-              { value: 'deodorizing_only', label: 'Deodorizing Only (No Cleanup)' },
+              { value: 'deodorizing_only', label: 'Deodorizing Only' },
             ]} />
           </div>
 
