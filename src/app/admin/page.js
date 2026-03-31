@@ -161,15 +161,40 @@ export default function AdminDashboard() {
 
   const saveCustomer = async (id) => {
     if (!editingCustomer) return;
-    setCustomers((prev) => prev.map((c) => c.id === id ? { ...c, schedule_day: editingCustomer.schedule_day, notes: editingCustomer.notes } : c));
+    const updates = {
+      first_name: editingCustomer.first_name,
+      last_name: editingCustomer.last_name,
+      phone: editingCustomer.phone,
+      email: editingCustomer.email || null,
+      address: editingCustomer.address,
+      dogs: parseInt(editingCustomer.dogs, 10) || 1,
+      yard_size: editingCustomer.yard_size,
+      frequency: editingCustomer.frequency,
+      deodorizing: editingCustomer.deodorizing,
+      schedule_day: editingCustomer.schedule_day || null,
+      monthly_rate: parseInt(editingCustomer.monthly_rate, 10) || 0,
+      notes: editingCustomer.notes,
+      updated_at: new Date().toISOString(),
+    };
+    setCustomers((prev) => prev.map((c) => c.id === id ? { ...c, ...updates } : c));
     if (isSupabaseConfigured()) {
-      await supabase.from('customers').update({
-        schedule_day: editingCustomer.schedule_day || null,
-        notes: editingCustomer.notes,
-        updated_at: new Date().toISOString(),
-      }).eq('id', id);
+      await supabase.from('customers').update(updates).eq('id', id);
     }
     setEditingCustomer(null);
+  };
+
+  const deleteCustomer = async (id) => {
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
+    if (isSupabaseConfigured()) {
+      await supabase.from('customers').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', id);
+    }
+  };
+
+  const deleteLead = async (id) => {
+    setLeads((prev) => prev.filter((l) => l.id !== id));
+    if (isSupabaseConfigured()) {
+      await supabase.from('leads').delete().eq('id', id);
+    }
   };
 
   const todayStops = useMemo(() => {
@@ -260,6 +285,7 @@ export default function AdminDashboard() {
             editingLead={editingLead}
             setEditingLead={setEditingLead}
             onSaveLead={saveLead}
+            onDeleteLead={deleteLead}
             pendingApproval={pendingApproval}
             setPendingApproval={setPendingApproval}
           />
@@ -270,6 +296,7 @@ export default function AdminDashboard() {
             editingCustomer={editingCustomer}
             setEditingCustomer={setEditingCustomer}
             onSaveCustomer={saveCustomer}
+            onDeleteCustomer={deleteCustomer}
           />
         )}
         {activeTab === 'schedule' && <ScheduleTab customers={customers} />}
@@ -366,7 +393,8 @@ function TodayTab({ stops }) {
 
 // ─── LEADS TAB ────────────────────────────────────────────────────────────────
 
-function LeadsTab({ leads, statusFilter, setStatusFilter, onUpdateStatus, editingLead, setEditingLead, onSaveLead, pendingApproval, setPendingApproval }) {
+function LeadsTab({ leads, statusFilter, setStatusFilter, onUpdateStatus, editingLead, setEditingLead, onSaveLead, onDeleteLead, pendingApproval, setPendingApproval }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const statusColors = {
     new: 'bg-blue-100 text-blue-800',
     contacted: 'bg-yellow-100 text-yellow-800',
@@ -576,7 +604,26 @@ function LeadsTab({ leads, statusFilter, setStatusFilter, onUpdateStatus, editin
                       Decline
                     </button>
                   )}
+                  {(lead.status === 'approved' || lead.status === 'declined') && confirmDeleteId !== lead.id && (
+                    <button onClick={() => setConfirmDeleteId(lead.id)} className="text-xs font-bold uppercase bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-red-100 hover:text-red-600 transition-colors ml-auto">
+                      Delete
+                    </button>
+                  )}
                 </div>
+
+                {confirmDeleteId === lead.id && (
+                  <div className="mt-3 border border-red-200 bg-red-50 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
+                    <p className="text-xs text-red-700 font-semibold">Permanently delete this lead?</p>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button onClick={() => { onDeleteLead(lead.id); setConfirmDeleteId(null); }} className="text-xs font-bold uppercase bg-red-600 text-white px-3 py-1.5 rounded-lg">
+                        Delete
+                      </button>
+                      <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold uppercase bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -588,7 +635,7 @@ function LeadsTab({ leads, statusFilter, setStatusFilter, onUpdateStatus, editin
 
 // ─── CUSTOMERS TAB ────────────────────────────────────────────────────────────
 
-function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCustomer }) {
+function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer }) {
   const recurring = customers.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
   const onetimes = customers.filter((c) => c.frequency === 'onetime' || c.frequency === 'deodorizing_only');
 
@@ -605,13 +652,13 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
           {recurring.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-heading text-sm uppercase tracking-widest text-gray-500">Recurring Customers ({recurring.length})</h3>
-              {recurring.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} />)}
+              {recurring.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} />)}
             </div>
           )}
           {onetimes.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-heading text-sm uppercase tracking-widest text-gray-500">One-Time Appointments ({onetimes.length})</h3>
-              {onetimes.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} showDate />)}
+              {onetimes.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} showDate />)}
             </div>
           )}
         </>
@@ -620,11 +667,33 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
   );
 }
 
-function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, showDate = false }) {
+function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer, showDate = false }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isEditing = editingCustomer?.id === c.id;
+  const ec = editingCustomer;
+  const set = (field) => (e) => setEditingCustomer((p) => ({ ...p, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+
+  const openEdit = () => setEditingCustomer({
+    id: c.id,
+    first_name: c.first_name,
+    last_name: c.last_name,
+    phone: c.phone,
+    email: c.email || '',
+    address: c.address,
+    dogs: String(c.dogs || 1),
+    yard_size: c.yard_size || 'small',
+    frequency: c.frequency || 'weekly',
+    deodorizing: c.deodorizing || false,
+    schedule_day: c.schedule_day || '',
+    monthly_rate: String(c.monthly_rate || c.quoted_monthly || ''),
+    notes: c.notes || '',
+  });
+
+  const isRecurring = (ec?.frequency || c.frequency) !== 'onetime' && (ec?.frequency || c.frequency) !== 'deodorizing_only';
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
+      {/* Card header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -638,15 +707,14 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
             <span className="capitalize">{c.yard_size} yard</span>
             {c.deodorizing && <span className="text-brand-green font-semibold">+ Deodorizing</span>}
             {!showDate && c.schedule_day && <span className="capitalize font-semibold text-brand-green">{c.schedule_day}s</span>}
+            {!showDate && !c.schedule_day && c.frequency !== 'onetime' && <span className="text-amber-600 font-semibold">⚠ Unscheduled</span>}
             {showDate && c.start_date && <span className="font-semibold text-blue-600">Appt: {new Date(c.start_date + 'T12:00:00').toLocaleDateString()}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-          <div className="text-right">
-            <p className="font-heading font-bold text-brand-red">${c.monthly_rate || c.quoted_monthly}/mo</p>
-          </div>
+          <p className="font-heading font-bold text-brand-red">${c.monthly_rate || c.quoted_monthly}/mo</p>
           <button
-            onClick={() => isEditing ? setEditingCustomer(null) : setEditingCustomer({ id: c.id, schedule_day: c.schedule_day || '', notes: c.notes || '' })}
+            onClick={() => isEditing ? setEditingCustomer(null) : openEdit()}
             className="text-gray-400 hover:text-gray-700 transition-colors p-1"
             title="Edit"
           >
@@ -657,56 +725,137 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
         </div>
       </div>
 
+      {/* Notes alert */}
       {c.notes && !isEditing && (
         <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-2 text-xs text-amber-800">
           <span className="font-bold">Notes:</span> {c.notes}
         </div>
       )}
 
+      {/* Full edit form */}
       {isEditing && (
-        <div className="border border-gray-200 rounded-lg p-3 mt-2 bg-gray-50 space-y-2">
-          {!showDate && (
+        <div className="border border-gray-200 rounded-lg p-4 mt-3 bg-gray-50 space-y-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Edit Customer</p>
+
+          <div className="grid grid-cols-2 gap-2">
+            <EditField label="First Name" value={ec.first_name} onChange={set('first_name')} />
+            <EditField label="Last Name" value={ec.last_name} onChange={set('last_name')} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <EditField label="Phone" value={ec.phone} onChange={set('phone')} type="tel" />
+            <EditField label="Email" value={ec.email} onChange={set('email')} type="email" />
+          </div>
+          <EditField label="Address" value={ec.address} onChange={set('address')} />
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Service Day</label>
-              <select
-                value={editingCustomer.schedule_day}
-                onChange={(e) => setEditingCustomer((p) => ({ ...p, schedule_day: e.target.value }))}
-                className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white"
-              >
-                <option value="">Unscheduled</option>
-                {DAYS.map((d) => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Dogs</label>
+              <select value={ec.dogs} onChange={set('dogs')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
+                {['1','2','3','4','5'].map((n) => <option key={n} value={n}>{n} dog{n !== '1' ? 's' : ''}</option>)}
               </select>
             </div>
-          )}
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Yard Size</label>
+              <select value={ec.yard_size} onChange={set('yard_size')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
+                {['small','medium','large','xl'].map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Service Type</label>
+              <select value={ec.frequency} onChange={set('frequency')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Bi-Weekly</option>
+                <option value="onetime">One-Time</option>
+                <option value="deodorizing_only">Deodorizing Only</option>
+              </select>
+            </div>
+            {isRecurring && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Service Day</label>
+                <select value={ec.schedule_day} onChange={set('schedule_day')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
+                  <option value="">Unscheduled</option>
+                  {DAYS.map((d) => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2 items-end">
+            <EditField label="Monthly Rate ($)" value={ec.monthly_rate} onChange={set('monthly_rate')} type="number" />
+            <label className="flex items-center gap-2 pb-1.5 cursor-pointer">
+              <input type="checkbox" checked={ec.deodorizing} onChange={set('deodorizing')} className="w-4 h-4 rounded border-gray-300 text-brand-green" />
+              <span className="text-sm font-semibold text-gray-700">Deodorizing</span>
+            </label>
+          </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
             <textarea
-              value={editingCustomer.notes}
-              onChange={(e) => setEditingCustomer((p) => ({ ...p, notes: e.target.value }))}
+              value={ec.notes}
+              onChange={set('notes')}
               rows={2}
               className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full resize-none"
-              placeholder="Gate code, dog behavior, instructions..."
+              placeholder="Gate code, dog names/behavior, instructions..."
             />
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => onSaveCustomer(c.id)} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg">Save</button>
-            <button onClick={() => setEditingCustomer(null)} className="text-xs font-bold uppercase bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg">Cancel</button>
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex gap-2">
+              <button onClick={() => onSaveCustomer(c.id)} className="text-xs font-bold uppercase bg-brand-green text-white px-4 py-1.5 rounded-lg">Save Changes</button>
+              <button onClick={() => setEditingCustomer(null)} className="text-xs font-bold uppercase bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg">Cancel</button>
+            </div>
+            <button onClick={() => setConfirmDelete(true)} className="text-xs font-bold uppercase text-red-500 hover:text-red-700 transition-colors">
+              Remove Customer
+            </button>
           </div>
         </div>
       )}
 
-      <div className="flex gap-2 mt-3">
-        <a href={`tel:${c.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
-        <a href={`sms:${c.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
-        <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs font-bold uppercase bg-gray-700 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
-        >
-          Directions
-        </a>
-      </div>
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="mt-3 border border-red-200 bg-red-50 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
+          <p className="text-xs text-red-700 font-semibold">Remove {c.first_name} {c.last_name} as a customer?</p>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={() => { onDeleteCustomer(c.id); setConfirmDelete(false); }}
+              className="text-xs font-bold uppercase bg-red-600 text-white px-3 py-1.5 rounded-lg"
+            >
+              Remove
+            </button>
+            <button onClick={() => setConfirmDelete(false)} className="text-xs font-bold uppercase bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      {!isEditing && (
+        <div className="flex gap-2 mt-3">
+          <a href={`tel:${c.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
+          <a href={`sms:${c.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
+          <a
+            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-bold uppercase bg-gray-700 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            Directions
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EditField({ label, value, onChange, type = 'text' }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full"
+      />
     </div>
   );
 }
