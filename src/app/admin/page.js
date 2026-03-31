@@ -19,14 +19,16 @@ export default function AdminDashboard() {
   const [pendingApproval, setPendingApproval] = useState(null);
   const [todayOrder, setTodayOrder] = useState([]);
   const [declinedLeads, setDeclinedLeads] = useState([]);
+  const [allTimeLeadCount, setAllTimeLeadCount] = useState(0);
   const router = useRouter();
 
   const fetchData = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
     setLoading(true);
-    const [leadsRes, customersRes] = await Promise.all([
+    const [leadsRes, customersRes, countRes] = await Promise.all([
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
-      supabase.from('customers').select('*').eq('is_active', true).order('created_at', { ascending: false }),
+      supabase.from('customers').select('*').order('created_at', { ascending: false }),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).neq('status', 'deleted'),
     ]);
     if (leadsRes.data) {
       const active = leadsRes.data.filter((l) => l.status !== 'declined' && l.status !== 'approved' && l.status !== 'deleted');
@@ -35,6 +37,7 @@ export default function AdminDashboard() {
       setDeclinedLeads(declined);
     }
     if (customersRes.data) setCustomers(customersRes.data);
+    if (countRes.count != null) setAllTimeLeadCount(countRes.count);
     setLoading(false);
   }, []);
 
@@ -179,7 +182,28 @@ export default function AdminDashboard() {
   const deleteCustomer = async (id) => {
     setCustomers((prev) => prev.filter((c) => c.id !== id));
     if (isSupabaseConfigured()) {
+      await supabase.from('customers').update({ is_active: false, payment_status: 'removed', updated_at: new Date().toISOString() }).eq('id', id);
+    }
+  };
+
+  const pauseCustomer = async (id) => {
+    setCustomers((prev) => prev.map((c) => c.id === id ? { ...c, is_active: false } : c));
+    if (isSupabaseConfigured()) {
       await supabase.from('customers').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', id);
+    }
+  };
+
+  const resumeCustomer = async (id) => {
+    setCustomers((prev) => prev.map((c) => c.id === id ? { ...c, is_active: true } : c));
+    if (isSupabaseConfigured()) {
+      await supabase.from('customers').update({ is_active: true, updated_at: new Date().toISOString() }).eq('id', id);
+    }
+  };
+
+  const updatePaymentStatus = async (id, payment_status) => {
+    setCustomers((prev) => prev.map((c) => c.id === id ? { ...c, payment_status } : c));
+    if (isSupabaseConfigured()) {
+      await supabase.from('customers').update({ payment_status, updated_at: new Date().toISOString() }).eq('id', id);
     }
   };
 
@@ -206,9 +230,9 @@ export default function AdminDashboard() {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const todayName = dayNames[new Date().getDay()];
     const todayDate = new Date().toISOString().split('T')[0];
-    const recurring = customers.filter((c) => c.is_active && c.schedule_day === todayName && c.frequency !== 'onetime');
-    const oneTime = customers.filter((c) => c.is_active && c.frequency === 'onetime' && c.start_date === todayDate);
-    return [...recurring, ...oneTime];
+    const recurring = customers.filter((c) => c.is_active && c.schedule_day === todayName && c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
+    const singleVisit = customers.filter((c) => c.is_active && (c.frequency === 'onetime' || c.frequency === 'deodorizing_only') && c.start_date === todayDate);
+    return [...recurring, ...singleVisit];
   }, [customers]);
 
   // Reorder today's stops while keeping todayOrder IDs in sync
@@ -220,18 +244,33 @@ export default function AdminDashboard() {
   }, [baseTodayStops, todayOrder]);
 
   const analytics = useMemo(() => {
-    const total = leads.length;
-    const statusCounts = leads.reduce((acc, l) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc; }, {});
-    const sourceCounts = leads.reduce((acc, l) => {
+    const allLeads = [...leads, ...declinedLeads];
+    const sourceCounts = allLeads.reduce((acc, l) => {
       const src = l.heard_about || 'direct';
       acc[src] = (acc[src] || 0) + 1;
       return acc;
     }, {});
-    const approvalRate = total > 0 ? Math.round(((statusCounts.approved || 0) / total) * 100) : 0;
-    const monthlyRevenue = customers.filter((c) => c.is_active && c.frequency !== 'onetime').reduce((sum, c) => sum + (c.monthly_rate || 0), 0);
-    const totalDogs = customers.filter((c) => c.is_active).reduce((sum, c) => sum + (c.dogs || 1), 0);
-    return { total, statusCounts, sourceCounts, approvalRate, monthlyRevenue, totalDogs };
-  }, [leads, customers]);
+    const activeCustomers = customers.filter((c) => c.is_active);
+    const pausedCustomers = customers.filter((c) => !c.is_active);
+    const recurringCustomers = activeCustomers.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
+    const onetimeCustomers = customers.filter((c) => c.frequency === 'onetime' || c.frequency === 'deodorizing_only');
+    const monthlyRevenue = recurringCustomers.reduce((sum, c) => sum + (c.monthly_rate || 0), 0);
+    const onetimeRevenue = onetimeCustomers.reduce((sum, c) => sum + (c.monthly_rate || 0), 0);
+    const totalDogs = activeCustomers.reduce((sum, c) => sum + (c.dogs || 1), 0);
+    const approvalRate = allTimeLeadCount > 0 ? Math.round((activeCustomers.length / allTimeLeadCount) * 100) : 0;
+    return {
+      total: allTimeLeadCount,
+      activeLeads: leads.length,
+      declinedLeads: declinedLeads.length,
+      sourceCounts,
+      approvalRate,
+      monthlyRevenue,
+      onetimeRevenue,
+      totalDogs,
+      activeCount: activeCustomers.length,
+      pausedCount: pausedCustomers.length,
+    };
+  }, [leads, declinedLeads, customers, allTimeLeadCount]);
 
   const newLeadCount = leads.filter((l) => l.status === 'new').length;
 
@@ -311,6 +350,9 @@ export default function AdminDashboard() {
             onSaveCustomer={saveCustomer}
             onDeleteCustomer={deleteCustomer}
             onAddCustomer={addCustomer}
+            onPauseCustomer={pauseCustomer}
+            onResumeCustomer={resumeCustomer}
+            onUpdatePayment={updatePaymentStatus}
           />
         )}
         {activeTab === 'schedule' && <ScheduleTab customers={customers} />}
@@ -569,6 +611,11 @@ function LeadsTab({ leads, statusFilter, setStatusFilter, onUpdateStatus, editin
                       )}
                     </div>
                     <p className="text-sm text-gray-500 mt-0.5">{lead.address}</p>
+                    {lead.created_at && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Submitted {new Date(lead.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                     <p className="font-heading text-lg font-bold text-brand-red">{priceDisplay}</p>
@@ -741,7 +788,7 @@ const BLANK_CUSTOMER = {
   schedule_day: '', start_date: '', monthly_rate: '', notes: '',
 };
 
-function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer, onAddCustomer }) {
+function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer, onAddCustomer, onPauseCustomer, onResumeCustomer, onUpdatePayment }) {
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState(BLANK_CUSTOMER);
@@ -757,8 +804,11 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
       )
     : customers;
 
-  const recurring = filtered.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
-  const onetimes = filtered.filter((c) => c.frequency === 'onetime' || c.frequency === 'deodorizing_only');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const activeFiltered = filtered.filter((c) => c.is_active);
+  const recurring = activeFiltered.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
+  const onetimes = activeFiltered.filter((c) => (c.frequency === 'onetime' || c.frequency === 'deodorizing_only') && (!c.start_date || c.start_date >= todayStr));
+  const pastOnetimes = activeFiltered.filter((c) => (c.frequency === 'onetime' || c.frequency === 'deodorizing_only') && c.start_date && c.start_date < todayStr);
 
   const setAdd = (field) => (e) =>
     setAddForm((p) => ({ ...p, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
@@ -895,23 +945,47 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
           {recurring.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-heading text-sm uppercase tracking-widest text-gray-500">Recurring Customers ({recurring.length})</h3>
-              {recurring.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} />)}
+              {recurring.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} onPause={onPauseCustomer} onResume={onResumeCustomer} onUpdatePayment={onUpdatePayment} />)}
             </div>
           )}
           {onetimes.length > 0 && (
             <div className="space-y-3">
-              <h3 className="font-heading text-sm uppercase tracking-widest text-gray-500">One-Time Appointments ({onetimes.length})</h3>
-              {onetimes.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} showDate />)}
+              <h3 className="font-heading text-sm uppercase tracking-widest text-gray-500">Upcoming One-Time Appointments ({onetimes.length})</h3>
+              {onetimes.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} onPause={onPauseCustomer} onResume={onResumeCustomer} onUpdatePayment={onUpdatePayment} showDate />)}
             </div>
           )}
+          {pastOnetimes.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="font-heading text-sm uppercase tracking-widest text-gray-400">Past One-Time Appointments ({pastOnetimes.length})</h3>
+              {pastOnetimes.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} onPause={onPauseCustomer} onResume={onResumeCustomer} onUpdatePayment={onUpdatePayment} showDate past />)}
+            </div>
+          )}
+          {(() => {
+            const paused = filtered.filter((c) => !c.is_active && c.payment_status !== 'removed');
+            return paused.length > 0 ? (
+              <div className="space-y-3">
+                <h3 className="font-heading text-sm uppercase tracking-widest text-gray-500">Paused ({paused.length})</h3>
+                {paused.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} onPause={onPauseCustomer} onResume={onResumeCustomer} onUpdatePayment={onUpdatePayment} />)}
+              </div>
+            ) : null;
+          })()}
         </>
       )}
     </div>
   );
 }
 
-function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer, showDate = false }) {
+const PAYMENT_STYLES = {
+  paid:    { label: 'Paid',    cls: 'bg-green-100 text-green-700' },
+  unpaid:  { label: 'Unpaid',  cls: 'bg-red-100 text-red-700' },
+  overdue: { label: 'Overdue', cls: 'bg-orange-100 text-orange-700' },
+  pending: { label: 'Pending', cls: 'bg-gray-100 text-gray-500' },
+};
+const PAYMENT_CYCLE = ['pending', 'paid', 'unpaid', 'overdue'];
+
+function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer, onPause, onResume, onUpdatePayment, showDate = false, past = false }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmPause, setConfirmPause] = useState(false);
   const isEditing = editingCustomer?.id === c.id;
   const ec = editingCustomer;
   const set = (field) => (e) => setEditingCustomer((p) => ({ ...p, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
@@ -936,14 +1010,33 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
   const isRecurring = (ec?.frequency || c.frequency) !== 'onetime' && (ec?.frequency || c.frequency) !== 'deodorizing_only';
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
+    <div className={`bg-white rounded-xl border p-4 ${past ? 'border-gray-100 opacity-70' : 'border-gray-200'}`}>
       {/* Card header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-bold text-gray-900">{c.first_name} {c.last_name}</h3>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 uppercase">Active</span>
+            {past
+              ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 uppercase">Completed</span>
+              : c.is_active
+                ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 uppercase">Active</span>
+                : <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 uppercase">Paused</span>
+            }
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 uppercase">{c.frequency}</span>
+            {/* Payment status badge — click to cycle */}
+            {c.is_active && c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only' && (
+              <button
+                onClick={() => {
+                  const cur = c.payment_status || 'pending';
+                  const next = PAYMENT_CYCLE[(PAYMENT_CYCLE.indexOf(cur) + 1) % PAYMENT_CYCLE.length];
+                  onUpdatePayment(c.id, next);
+                }}
+                className={`text-xs font-bold px-2 py-0.5 rounded-full uppercase cursor-pointer hover:opacity-80 transition-opacity ${(PAYMENT_STYLES[c.payment_status] || PAYMENT_STYLES.pending).cls}`}
+                title="Click to change payment status"
+              >
+                {(PAYMENT_STYLES[c.payment_status] || PAYMENT_STYLES.pending).label}
+              </button>
+            )}
           </div>
           <p className="text-sm text-gray-500 mt-0.5">{c.address}</p>
           <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
@@ -951,7 +1044,7 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
             <span className="capitalize">{c.yard_size} yard</span>
             {c.deodorizing && <span className="text-brand-green font-semibold">+ Deodorizing</span>}
             {!showDate && c.schedule_day && <span className="capitalize font-semibold text-brand-green">{c.schedule_day}s</span>}
-            {!showDate && !c.schedule_day && c.frequency !== 'onetime' && <span className="text-amber-600 font-semibold">⚠ Unscheduled</span>}
+            {!showDate && !c.schedule_day && c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only' && <span className="text-amber-600 font-semibold">⚠ Unscheduled</span>}
             {showDate && c.start_date && <span className="font-semibold text-blue-600">Appt: {new Date(c.start_date + 'T12:00:00').toLocaleDateString()}</span>}
           </div>
         </div>
@@ -1081,9 +1174,20 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
         </div>
       )}
 
+      {/* Delete confirmation */}
+      {confirmPause && (
+        <div className="mt-3 border border-yellow-200 bg-yellow-50 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
+          <p className="text-xs text-yellow-800 font-semibold">Pause {c.first_name}? They&apos;ll be hidden from Today &amp; Schedule but not deleted.</p>
+          <div className="flex gap-2 flex-shrink-0">
+            <button onClick={() => { onPause(c.id); setConfirmPause(false); }} className="text-xs font-bold uppercase bg-yellow-500 text-white px-3 py-1.5 rounded-lg">Pause</button>
+            <button onClick={() => setConfirmPause(false)} className="text-xs font-bold uppercase bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg">Cancel</button>
+          </div>
+        </div>
+      )}
+
       {/* Action buttons */}
-      {!isEditing && (
-        <div className="flex gap-2 mt-3">
+      {!isEditing && !confirmPause && (
+        <div className="flex flex-wrap gap-2 mt-3">
           <a href={`tel:${c.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
           <a href={`sms:${c.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
           <a
@@ -1094,6 +1198,10 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
           >
             Directions
           </a>
+          {c.is_active
+            ? <button onClick={() => setConfirmPause(true)} className="text-xs font-bold uppercase bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg hover:bg-yellow-200 transition-colors ml-auto">Pause</button>
+            : <button onClick={() => onResume(c.id)} className="text-xs font-bold uppercase bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 transition-colors ml-auto">Resume</button>
+          }
         </div>
       )}
     </div>
@@ -1405,17 +1513,19 @@ const SOURCE_LABELS = {
 const SOURCE_COLORS = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-gray-500'];
 
 function AnalyticsTab({ analytics, customers }) {
-  const { total, statusCounts, sourceCounts, approvalRate, monthlyRevenue, totalDogs } = analytics;
+  const { total, activeLeads, declinedLeads: declinedCount, sourceCounts, approvalRate, monthlyRevenue, onetimeRevenue, totalDogs, activeCount, pausedCount } = analytics;
 
   const sourceEntries = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]);
   const maxSource = sourceEntries.length > 0 ? sourceEntries[0][1] : 1;
 
   const funnel = [
-    { label: 'Total Leads', count: total, color: 'bg-gray-400' },
-    { label: 'Contacted', count: statusCounts.contacted || 0, color: 'bg-yellow-400' },
-    { label: 'Approved', count: statusCounts.approved || 0, color: 'bg-green-500' },
-    { label: 'Declined', count: statusCounts.declined || 0, color: 'bg-red-400' },
+    { label: 'All-Time Leads', count: total, color: 'bg-gray-400' },
+    { label: 'Active Customers', count: activeCount, color: 'bg-green-500' },
+    { label: 'Open Leads', count: activeLeads, color: 'bg-yellow-400' },
+    { label: 'Declined', count: declinedCount, color: 'bg-red-400' },
   ];
+
+  const avgRevenue = activeCount > 0 ? Math.round(monthlyRevenue / activeCount) : 0;
 
   return (
     <div className="space-y-6">
@@ -1424,9 +1534,9 @@ function AnalyticsTab({ analytics, customers }) {
       {/* Key stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Leads', value: total, sub: 'All time' },
-          { label: 'Approval Rate', value: `${approvalRate}%`, sub: `${statusCounts.approved || 0} approved` },
-          { label: 'Monthly Revenue', value: `$${monthlyRevenue}`, sub: 'Recurring customers' },
+          { label: 'All-Time Leads', value: total, sub: 'Total inquiries' },
+          { label: 'Active Customers', value: activeCount, sub: pausedCount > 0 ? `${pausedCount} paused` : 'No paused' },
+          { label: 'Monthly Revenue', value: `$${monthlyRevenue}`, sub: `Avg $${avgRevenue}/customer` },
           { label: 'Total Dogs', value: totalDogs, sub: 'Active customers' },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl border border-gray-200 p-4 text-center">
@@ -1435,6 +1545,31 @@ function AnalyticsTab({ analytics, customers }) {
             <p className="text-xs text-gray-400 mt-0.5">{s.sub}</p>
           </div>
         ))}
+      </div>
+
+      {/* Revenue breakdown */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h3 className="font-heading text-base font-bold text-gray-900 mb-4 uppercase tracking-wider">Revenue Breakdown</h3>
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="font-heading text-2xl font-bold text-brand-green">${monthlyRevenue}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Recurring / Month</p>
+          </div>
+          <div>
+            <p className="font-heading text-2xl font-bold text-blue-500">${onetimeRevenue}</p>
+            <p className="text-xs text-gray-500 mt-0.5">One-Time Jobs</p>
+          </div>
+          <div>
+            <p className="font-heading text-2xl font-bold text-gray-900">${monthlyRevenue + onetimeRevenue}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Total All Sources</p>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-1 text-xs text-gray-400">
+          <span className="font-semibold text-gray-600">Close Rate:</span>
+          <span>{approvalRate}%</span>
+          <span className="ml-2 font-semibold text-gray-600">Active Customers:</span>
+          <span>{activeCount}</span>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -1446,7 +1581,7 @@ function AnalyticsTab({ analytics, customers }) {
           ) : (
             <div className="space-y-3">
               {sourceEntries.map(([src, count], i) => {
-                const pct = Math.round((count / total) * 100);
+                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                 return (
                   <div key={src}>
                     <div className="flex justify-between text-sm mb-1">
@@ -1468,7 +1603,7 @@ function AnalyticsTab({ analytics, customers }) {
 
         {/* Status funnel */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="font-heading text-base font-bold text-gray-900 mb-4 uppercase tracking-wider">Lead Funnel</h3>
+          <h3 className="font-heading text-base font-bold text-gray-900 mb-4 uppercase tracking-wider">Pipeline Overview</h3>
           {total === 0 ? (
             <p className="text-sm text-gray-400">No data yet.</p>
           ) : (
@@ -1497,7 +1632,7 @@ function AnalyticsTab({ analytics, customers }) {
         <h3 className="font-heading text-base font-bold text-gray-900 mb-4 uppercase tracking-wider">Customers by Service Day</h3>
         <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
           {DAYS.map((day) => {
-            const count = customers.filter((c) => c.schedule_day === day && c.frequency !== 'onetime').length;
+            const count = customers.filter((c) => c.is_active && c.schedule_day === day && c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only').length;
             return (
               <div key={day} className="text-center">
                 <p className="font-heading text-2xl font-bold text-brand-red">{count}</p>
