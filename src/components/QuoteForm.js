@@ -10,6 +10,8 @@ const INITIAL_FORM = {
   phone: '',
   email: '',
   address: '',
+  city: '',
+  dogs: '1',
   yardSize: 'small',
   frequency: 'weekly',
   deodorizing: false,
@@ -51,7 +53,8 @@ export default function QuoteForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          dogs: 0,
+          address: form.city ? `${form.address}, ${form.city}` : form.address,
+          dogs: parseInt(form.dogs, 10) || 1,
           quotedMonthly: result.monthlyTotal,
           quotedWeekly: result.weeklyPrice,
           isHeavyCleanup: result.isHeavyCleanup,
@@ -117,7 +120,17 @@ export default function QuoteForm() {
             <FormField label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="you@email.com" />
           </div>
 
-          <FormField label="Address" name="address" value={form.address} onChange={handleChange} required placeholder="123 Main St, Cartersville, GA" />
+          <FormField label="Street Address" name="address" value={form.address} onChange={handleChange} required placeholder="123 Main St" />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="City, State" name="city" value={form.city} onChange={handleChange} required placeholder="Cartersville, GA" />
+            <SelectField label="Number of Dogs" name="dogs" value={form.dogs} onChange={handleChange} options={[
+              { value: '1', label: '1 dog' },
+              { value: '2', label: '2 dogs' },
+              { value: '3', label: '3 dogs' },
+              { value: '4', label: '4 dogs' },
+              { value: '5', label: '5+ dogs' },
+            ]} />
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Yard Size" name="yardSize" value={form.yardSize} onChange={handleChange} options={[
@@ -199,7 +212,7 @@ export default function QuoteForm() {
             </label>
             <textarea name="notes" value={form.notes} onChange={handleChange} rows={3}
               className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green transition-colors resize-none"
-              placeholder="Gate code, special instructions, questions..."
+              placeholder="Gate code, dog names, any dogs that are aggressive or need to be inside, special instructions..."
             />
           </div>
 
