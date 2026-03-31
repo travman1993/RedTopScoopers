@@ -299,7 +299,13 @@ export default function AdminDashboard() {
 function TodayTab({ stops, onReorder }) {
   const [dragIndex, setDragIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
-  const [completed, setCompleted] = useState(new Set());
+  const todayKey = `rts_completed_${new Date().toISOString().split('T')[0]}`;
+  const [completed, setCompleted] = useState(() => {
+    try {
+      const saved = localStorage.getItem(todayKey);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayLabel = dayNames[new Date().getDay()];
   const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -317,7 +323,11 @@ function TodayTab({ stops, onReorder }) {
     setDragOverIndex(null);
   };
   const handleDragEnd = () => { setDragIndex(null); setDragOverIndex(null); };
-  const markComplete = (id) => setCompleted((prev) => new Set([...prev, id]));
+  const markComplete = (id) => setCompleted((prev) => {
+    const next = new Set([...prev, id]);
+    try { localStorage.setItem(todayKey, JSON.stringify([...next])); } catch {}
+    return next;
+  });
 
   const visible = stops.filter((s) => !completed.has(s.id));
   const doneCount = completed.size;
