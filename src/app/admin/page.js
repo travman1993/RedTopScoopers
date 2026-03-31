@@ -299,6 +299,7 @@ export default function AdminDashboard() {
 function TodayTab({ stops, onReorder }) {
   const [dragIndex, setDragIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [completed, setCompleted] = useState(new Set());
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayLabel = dayNames[new Date().getDay()];
   const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -316,6 +317,10 @@ function TodayTab({ stops, onReorder }) {
     setDragOverIndex(null);
   };
   const handleDragEnd = () => { setDragIndex(null); setDragOverIndex(null); };
+  const markComplete = (id) => setCompleted((prev) => new Set([...prev, id]));
+
+  const visible = stops.filter((s) => !completed.has(s.id));
+  const doneCount = completed.size;
 
   return (
     <div className="space-y-4">
@@ -324,87 +329,122 @@ function TodayTab({ stops, onReorder }) {
           <h2 className="font-heading text-xl font-bold text-gray-900">{todayLabel}&apos;s Schedule</h2>
           <p className="text-sm text-gray-500">{todayFormatted}</p>
         </div>
-        <span className="font-heading font-bold text-brand-green text-lg">{stops.length} stop{stops.length !== 1 ? 's' : ''}</span>
+        <div className="text-right">
+          <span className="font-heading font-bold text-brand-green text-lg">{visible.length} left</span>
+          {doneCount > 0 && <p className="text-xs text-gray-400">{doneCount} completed</p>}
+        </div>
       </div>
 
-      {stops.length > 1 && (
+      {visible.length > 1 && (
         <p className="text-xs text-gray-400 text-center">Hold and drag a stop to reorder your route</p>
       )}
 
-      {stops.length === 0 ? (
+      {visible.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-          <p className="text-2xl mb-2">🎉</p>
-          <p className="font-bold text-gray-700">Nothing scheduled for today</p>
-          <p className="text-sm text-gray-400 mt-1">Enjoy the day off or check the Schedule tab to plan ahead.</p>
+          {stops.length === 0 ? (
+            <>
+              <p className="text-2xl mb-2">🎉</p>
+              <p className="font-bold text-gray-700">Nothing scheduled for today</p>
+              <p className="text-sm text-gray-400 mt-1">Enjoy the day off or check the Schedule tab to plan ahead.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl mb-2">✅</p>
+              <p className="font-bold text-gray-700">All {doneCount} stop{doneCount !== 1 ? 's' : ''} done!</p>
+              <p className="text-sm text-gray-400 mt-1">Great work today.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
-          {stops.map((stop, i) => (
-            <div
-              key={stop.id || i}
-              draggable
-              onDragStart={() => handleDragStart(i)}
-              onDragOver={(e) => handleDragOver(e, i)}
-              onDrop={(e) => handleDrop(e, i)}
-              onDragEnd={handleDragEnd}
-              className={`bg-white rounded-xl border p-4 transition-all cursor-grab active:cursor-grabbing select-none ${
-                dragOverIndex === i && dragIndex !== i
-                  ? 'border-brand-green shadow-lg scale-[1.01]'
-                  : dragIndex === i
-                  ? 'opacity-40 border-gray-300'
-                  : 'border-gray-200'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-                    <span className="w-8 h-8 rounded-full bg-brand-green text-white text-sm font-bold font-heading flex items-center justify-center">
-                      {i + 1}
-                    </span>
-                    <svg className="w-3.5 h-3.5 text-gray-300 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M7 2a1 1 0 000 2h6a1 1 0 000-2H7zM4 7a1 1 0 000 2h12a1 1 0 000-2H4zM4 12a1 1 0 000 2h12a1 1 0 000-2H4zM7 17a1 1 0 000 2h6a1 1 0 000-2H7z"/>
-                    </svg>
+          {visible.map((stop, i) => {
+            const onTheWayCall = `tel:${stop.phone}`;
+            const onTheWayText = `sms:${stop.phone}${typeof window !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent) ? '&' : '?'}body=${encodeURIComponent(`Hi ${stop.first_name}, it's Red Top Scoopers — we're on our way to your place now! See you shortly.`)}`;
+            const gatePhotoText = `sms:${stop.phone}${typeof window !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent) ? '&' : '?'}body=${encodeURIComponent(`Hi ${stop.first_name}, your yard is all cleaned up and your gate is secured! Here's a photo for your records 📸`)}`;
+
+            return (
+              <div
+                key={stop.id || i}
+                draggable
+                onDragStart={() => handleDragStart(i)}
+                onDragOver={(e) => handleDragOver(e, i)}
+                onDrop={(e) => handleDrop(e, i)}
+                onDragEnd={handleDragEnd}
+                className={`bg-white rounded-xl border p-4 transition-all cursor-grab active:cursor-grabbing select-none ${
+                  dragOverIndex === i && dragIndex !== i
+                    ? 'border-brand-green shadow-lg scale-[1.01]'
+                    : dragIndex === i
+                    ? 'opacity-40 border-gray-300'
+                    : 'border-gray-200'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
+                      <span className="w-8 h-8 rounded-full bg-brand-green text-white text-sm font-bold font-heading flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <svg className="w-3.5 h-3.5 text-gray-300 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M7 2a1 1 0 000 2h6a1 1 0 000-2H7zM4 7a1 1 0 000 2h12a1 1 0 000-2H4zM4 12a1 1 0 000 2h12a1 1 0 000-2H4zM7 17a1 1 0 000 2h6a1 1 0 000-2H7z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900">{stop.first_name} {stop.last_name}</p>
+                      <p className="text-sm text-gray-500">{stop.address}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-bold text-gray-900">{stop.first_name} {stop.last_name}</p>
-                    <p className="text-sm text-gray-500">{stop.address}</p>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {(stop.frequency === 'onetime' || stop.frequency === 'deodorizing_only') && (
+                      <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">One-Time</span>
+                    )}
+                    <span className="text-xs font-bold text-brand-red font-heading">${stop.monthly_rate || stop.weekly_rate}/mo</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {(stop.frequency === 'onetime' || stop.frequency === 'deodorizing_only') && (
-                    <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">One-Time</span>
-                  )}
-                  <span className="text-xs font-bold text-brand-red font-heading">${stop.monthly_rate || stop.weekly_rate}/mo</span>
+
+                <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-3">
+                  <span className="font-semibold text-gray-700">{stop.dogs || 1} dog{(stop.dogs || 1) !== 1 ? 's' : ''}</span>
+                  <span className="capitalize">{stop.yard_size} yard</span>
+                  {stop.deodorizing && <span className="text-brand-green font-semibold">+ Deodorizing</span>}
+                  {stop.frequency !== 'onetime' && <span className="capitalize">{stop.frequency}</span>}
+                </div>
+
+                {stop.notes && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 text-xs text-amber-800">
+                    <span className="font-bold">Notes:</span> {stop.notes}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                  <a href={onTheWayCall} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">
+                    Call On The Way
+                  </a>
+                  <a href={onTheWayText} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">
+                    Text On The Way
+                  </a>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-bold uppercase bg-gray-700 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
+                  >
+                    Directions
+                  </a>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                  <a href={gatePhotoText} className="text-xs font-bold uppercase bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors">
+                    Send Gate Photo
+                  </a>
+                  <button
+                    onClick={() => markComplete(stop.id)}
+                    className="text-xs font-bold uppercase bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    ✓ Mark Complete
+                  </button>
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-3">
-                <span className="font-semibold text-gray-700">{stop.dogs || 1} dog{(stop.dogs || 1) !== 1 ? 's' : ''}</span>
-                <span className="capitalize">{stop.yard_size} yard</span>
-                {stop.deodorizing && <span className="text-brand-green font-semibold">+ Deodorizing</span>}
-                {stop.frequency !== 'onetime' && <span className="capitalize">{stop.frequency}</span>}
-              </div>
-
-              {stop.notes && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 text-xs text-amber-800">
-                  <span className="font-bold">Notes:</span> {stop.notes}
-                </div>
-              )}
-
-              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                <a href={`tel:${stop.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
-                <a href={`sms:${stop.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-bold uppercase bg-gray-700 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
-                >
-                  Directions
-                </a>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
