@@ -61,6 +61,8 @@ export default function AdminDashboard() {
   const [editingLead, setEditingLead] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [pendingApproval, setPendingApproval] = useState(null);
+  const [todayOrder, setTodayOrder] = useState([]);
+  const [declinedLeads, setDeclinedLeads] = useState([]);
   const router = useRouter();
 
   const fetchData = useCallback(async () => {
@@ -70,7 +72,10 @@ export default function AdminDashboard() {
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
       supabase.from('customers').select('*').eq('is_active', true).order('created_at', { ascending: false }),
     ]);
-    if (leadsRes.data) setLeads(leadsRes.data);
+    if (leadsRes.data) {
+      setLeads(leadsRes.data.filter((l) => l.status !== 'declined'));
+      setDeclinedLeads(leadsRes.data.filter((l) => l.status === 'declined'));
+    }
     if (customersRes.data) setCustomers(customersRes.data);
     setLoading(false);
   }, []);
@@ -91,19 +96,18 @@ export default function AdminDashboard() {
   };
 
   const updateLeadStatus = async (id, status, appointmentDate = null) => {
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
+    const lead = leads.find((l) => l.id === id);
+    if (!lead) return;
+
+    // Auto-remove lead from list on approve or decline — moves to customers / follow-up
+    setLeads((prev) => prev.filter((l) => l.id !== id));
 
     if (isSupabaseConfigured()) {
-      await supabase
-        .from('leads')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
       if (status === 'approved') {
-        const lead = leads.find((l) => l.id === id);
-        if (lead) {
-          const isOnetime = lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only';
-          await supabase.from('customers').insert([{
+        const isOnetime = lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only';
+        await Promise.all([
+          supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id),
+          supabase.from('customers').insert([{
             lead_id: lead.id,
             first_name: lead.first_name,
             last_name: lead.last_name,
@@ -120,28 +124,33 @@ export default function AdminDashboard() {
             notes: lead.notes || null,
             start_date: appointmentDate || new Date().toISOString().split('T')[0],
             is_active: true,
-          }]);
-          fetchData();
-        }
+          }]),
+        ]);
+        fetchData();
+      } else if (status === 'declined') {
+        await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+        setDeclinedLeads((prev) => [{ ...lead, status: 'declined' }, ...prev]);
+      } else {
+        await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
       }
     } else {
+      // Demo mode
       if (status === 'approved') {
-        const lead = leads.find((l) => l.id === id);
-        if (lead) {
-          const isOnetime = lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only';
-          setCustomers((prev) => [
-            ...prev,
-            {
-              ...lead,
-              id: Date.now(),
-              is_active: true,
-              schedule_day: isOnetime ? null : lead.preferred_day,
-              start_date: appointmentDate || new Date().toISOString().split('T')[0],
-              monthly_rate: lead.quoted_monthly,
-              weekly_rate: lead.quoted_weekly,
-            },
-          ]);
-        }
+        const isOnetime = lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only';
+        setCustomers((prev) => [
+          ...prev,
+          {
+            ...lead,
+            id: Date.now(),
+            is_active: true,
+            schedule_day: isOnetime ? null : lead.preferred_day,
+            start_date: appointmentDate || new Date().toISOString().split('T')[0],
+            monthly_rate: lead.quoted_monthly,
+            weekly_rate: lead.quoted_weekly,
+          },
+        ]);
+      } else if (status === 'declined') {
+        setDeclinedLeads((prev) => [{ ...lead, status: 'declined' }, ...prev]);
       }
     }
   };
@@ -192,12 +201,23 @@ export default function AdminDashboard() {
 
   const deleteLead = async (id) => {
     setLeads((prev) => prev.filter((l) => l.id !== id));
+    setDeclinedLeads((prev) => prev.filter((l) => l.id !== id));
     if (isSupabaseConfigured()) {
       await supabase.from('leads').delete().eq('id', id);
     }
   };
 
-  const todayStops = useMemo(() => {
+  const reopenLead = async (id) => {
+    const lead = declinedLeads.find((l) => l.id === id);
+    if (!lead) return;
+    setDeclinedLeads((prev) => prev.filter((l) => l.id !== id));
+    setLeads((prev) => [{ ...lead, status: 'new' }, ...prev]);
+    if (isSupabaseConfigured()) {
+      await supabase.from('leads').update({ status: 'new', updated_at: new Date().toISOString() }).eq('id', id);
+    }
+  };
+
+  const baseTodayStops = useMemo(() => {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const todayName = dayNames[new Date().getDay()];
     const todayDate = new Date().toISOString().split('T')[0];
@@ -205,6 +225,14 @@ export default function AdminDashboard() {
     const oneTime = customers.filter((c) => c.is_active && c.frequency === 'onetime' && c.start_date === todayDate);
     return [...recurring, ...oneTime];
   }, [customers]);
+
+  // Reorder today's stops while keeping todayOrder IDs in sync
+  const todayStops = useMemo(() => {
+    if (todayOrder.length === 0) return baseTodayStops;
+    const ordered = todayOrder.map((id) => baseTodayStops.find((s) => s.id === id)).filter(Boolean);
+    const unordered = baseTodayStops.filter((s) => !todayOrder.includes(s.id));
+    return [...ordered, ...unordered];
+  }, [baseTodayStops, todayOrder]);
 
   const analytics = useMemo(() => {
     const total = leads.length;
@@ -223,11 +251,11 @@ export default function AdminDashboard() {
   const newLeadCount = leads.filter((l) => l.status === 'new').length;
 
   const tabs = [
-    { id: 'today', label: "Today", count: todayStops.length },
+    { id: 'today', label: 'Today', count: todayStops.length },
     { id: 'leads', label: 'Leads', count: newLeadCount },
     { id: 'customers', label: 'Customers', count: customers.length },
     { id: 'schedule', label: 'Schedule' },
-    { id: 'routes', label: 'Routes' },
+    { id: 'followup', label: 'Follow-Up', count: declinedLeads.length },
     { id: 'analytics', label: 'Analytics' },
   ];
 
@@ -275,7 +303,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="p-4 max-w-6xl mx-auto">
-        {activeTab === 'today' && <TodayTab stops={todayStops} />}
+        {activeTab === 'today' && <TodayTab stops={todayStops} onReorder={(newOrder) => setTodayOrder(newOrder.map((s) => s.id))} />}
         {activeTab === 'leads' && (
           <LeadsTab
             leads={leads}
@@ -300,19 +328,35 @@ export default function AdminDashboard() {
           />
         )}
         {activeTab === 'schedule' && <ScheduleTab customers={customers} />}
-        {activeTab === 'routes' && <RoutesTab customers={customers} />}
+        {activeTab === 'followup' && <FollowUpTab leads={declinedLeads} onReopen={reopenLead} onDelete={deleteLead} />}
         {activeTab === 'analytics' && <AnalyticsTab analytics={analytics} customers={customers} />}
       </div>
     </div>
   );
 }
 
-// ─── TODAY TAB ───────────────────────────────────────────────────────────────
+// ─── TODAY TAB (drag-to-reorder) ─────────────────────────────────────────────
 
-function TodayTab({ stops }) {
+function TodayTab({ stops, onReorder }) {
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayLabel = dayNames[new Date().getDay()];
   const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const handleDragStart = (i) => setDragIndex(i);
+  const handleDragOver = (e, i) => { e.preventDefault(); setDragOverIndex(i); };
+  const handleDrop = (e, i) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === i) { setDragIndex(null); setDragOverIndex(null); return; }
+    const reordered = [...stops];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(i, 0, moved);
+    onReorder(reordered);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+  const handleDragEnd = () => { setDragIndex(null); setDragOverIndex(null); };
 
   return (
     <div className="space-y-4">
@@ -324,6 +368,10 @@ function TodayTab({ stops }) {
         <span className="font-heading font-bold text-brand-green text-lg">{stops.length} stop{stops.length !== 1 ? 's' : ''}</span>
       </div>
 
+      {stops.length > 1 && (
+        <p className="text-xs text-gray-400 text-center">Hold and drag a stop to reorder your route</p>
+      )}
+
       {stops.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
           <p className="text-2xl mb-2">🎉</p>
@@ -331,14 +379,33 @@ function TodayTab({ stops }) {
           <p className="text-sm text-gray-400 mt-1">Enjoy the day off or check the Schedule tab to plan ahead.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {stops.map((stop, i) => (
-            <div key={stop.id || i} className="bg-white rounded-xl border border-gray-200 p-4">
+            <div
+              key={stop.id || i}
+              draggable
+              onDragStart={() => handleDragStart(i)}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDrop={(e) => handleDrop(e, i)}
+              onDragEnd={handleDragEnd}
+              className={`bg-white rounded-xl border p-4 transition-all cursor-grab active:cursor-grabbing select-none ${
+                dragOverIndex === i && dragIndex !== i
+                  ? 'border-brand-green shadow-lg scale-[1.01]'
+                  : dragIndex === i
+                  ? 'opacity-40 border-gray-300'
+                  : 'border-gray-200'
+              }`}
+            >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-full bg-brand-green text-white text-sm font-bold font-heading flex items-center justify-center flex-shrink-0">
-                    {i + 1}
-                  </span>
+                  <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
+                    <span className="w-8 h-8 rounded-full bg-brand-green text-white text-sm font-bold font-heading flex items-center justify-center">
+                      {i + 1}
+                    </span>
+                    <svg className="w-3.5 h-3.5 text-gray-300 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M7 2a1 1 0 000 2h6a1 1 0 000-2H7zM4 7a1 1 0 000 2h12a1 1 0 000-2H4zM4 12a1 1 0 000 2h12a1 1 0 000-2H4zM7 17a1 1 0 000 2h6a1 1 0 000-2H7z"/>
+                    </svg>
+                  </div>
                   <div>
                     <p className="font-bold text-gray-900">{stop.first_name} {stop.last_name}</p>
                     <p className="text-sm text-gray-500">{stop.address}</p>
@@ -348,14 +415,12 @@ function TodayTab({ stops }) {
                   {(stop.frequency === 'onetime' || stop.frequency === 'deodorizing_only') && (
                     <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">One-Time</span>
                   )}
-                  <span className="text-xs font-bold text-brand-red font-heading">${stop.weekly_rate || stop.quoted_weekly}/wk</span>
+                  <span className="text-xs font-bold text-brand-red font-heading">${stop.monthly_rate || stop.weekly_rate}/mo</span>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-3">
-                <span className="flex items-center gap-1">
-                  <span className="font-semibold text-gray-700">{stop.dogs || 1}</span> dog{(stop.dogs || 1) !== 1 ? 's' : ''}
-                </span>
+                <span className="font-semibold text-gray-700">{stop.dogs || 1} dog{(stop.dogs || 1) !== 1 ? 's' : ''}</span>
                 <span className="capitalize">{stop.yard_size} yard</span>
                 {stop.deodorizing && <span className="text-brand-green font-semibold">+ Deodorizing</span>}
                 {stop.frequency !== 'onetime' && <span className="capitalize">{stop.frequency}</span>}
@@ -367,13 +432,9 @@ function TodayTab({ stops }) {
                 </div>
               )}
 
-              <div className="flex gap-2">
-                <a href={`tel:${stop.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">
-                  Call
-                </a>
-                <a href={`sms:${stop.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">
-                  Text
-                </a>
+              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                <a href={`tel:${stop.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
+                <a href={`sms:${stop.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}`}
                   target="_blank"
@@ -945,61 +1006,81 @@ function ScheduleTab({ customers }) {
 
 // ─── ROUTES TAB ───────────────────────────────────────────────────────────────
 
-function RoutesTab({ customers }) {
-  const recurring = customers.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
+// ─── FOLLOW-UP TAB ───────────────────────────────────────────────────────────
 
-  const hasAny = DAYS.some((d) => recurring.some((c) => c.schedule_day === d));
+function FollowUpTab({ leads, onReopen, onDelete }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   return (
     <div className="space-y-4">
-      <h2 className="font-heading text-xl font-bold text-gray-900">Routes</h2>
-      <p className="text-sm text-gray-500">Recurring customers grouped by service day.</p>
+      <div>
+        <h2 className="font-heading text-xl font-bold text-gray-900">Follow-Up</h2>
+        <p className="text-sm text-gray-500 mt-0.5">Declined leads — reach back out or clean up.</p>
+      </div>
 
-      {!hasAny ? (
+      {leads.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-          <p className="text-gray-400">No routes yet. Approve leads and assign schedule days to build routes.</p>
+          <p className="text-gray-400">No declined leads. Good work.</p>
         </div>
       ) : (
-        DAYS.map((day) => {
-          const dayCustomers = recurring.filter((c) => c.schedule_day === day);
-          if (dayCustomers.length === 0) return null;
-          return (
-            <div key={day} className="bg-white rounded-xl border border-gray-200 p-4">
-              <h3 className="font-heading text-base font-bold text-brand-green uppercase tracking-wider mb-3">
-                {day} — {dayCustomers.length} stop{dayCustomers.length !== 1 ? 's' : ''}
-              </h3>
-              <div className="space-y-3">
-                {dayCustomers.map((c, i) => (
-                  <div key={c.id} className="flex items-center gap-3 text-sm">
-                    <span className="w-7 h-7 rounded-full bg-brand-green text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold">{c.first_name} {c.last_name}</span>
-                        <span className="text-gray-400 text-xs">{c.dogs || 1} dog{(c.dogs || 1) !== 1 ? 's' : ''}</span>
-                        {c.deodorizing && <span className="text-xs text-brand-green font-semibold">+ Deodorizing</span>}
-                      </div>
-                      <p className="text-gray-400 text-xs mt-0.5">{c.address}</p>
-                      {c.notes && <p className="text-xs text-amber-700 mt-0.5">⚠ {c.notes}</p>}
-                    </div>
-                    <div className="flex gap-1.5 flex-shrink-0">
-                      <a href={`tel:${c.phone}`} className="text-xs bg-brand-green text-white px-2 py-1 rounded font-bold">Call</a>
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs bg-gray-700 text-white px-2 py-1 rounded font-bold"
-                      >
-                        Map
-                      </a>
-                    </div>
+        <div className="space-y-3">
+          {leads.map((lead) => (
+            <div key={lead.id} className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-gray-900">{lead.first_name} {lead.last_name}</h3>
+                    <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700">Declined</span>
+                    {(lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only') && (
+                      <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">One-Time</span>
+                    )}
                   </div>
-                ))}
+                  <p className="text-sm text-gray-500 mt-0.5">{lead.address}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {lead.frequency} · {lead.dogs || 1} dog{(lead.dogs || 1) !== 1 ? 's' : ''} · {lead.yard_size} yard
+                    {lead.heard_about ? ` · via ${lead.heard_about}` : ''}
+                  </p>
+                </div>
+                <p className="font-heading font-bold text-gray-400 text-sm flex-shrink-0 ml-2">
+                  ${lead.quoted_monthly}{lead.frequency !== 'onetime' ? '/mo' : ' flat'}
+                </p>
               </div>
+
+              {lead.notes && (
+                <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3 text-xs text-amber-800">
+                  <span className="font-bold">Notes:</span> {lead.notes}
+                </div>
+              )}
+
+              {confirmDeleteId === lead.id ? (
+                <div className="border border-red-200 bg-red-50 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
+                  <p className="text-xs text-red-700 font-semibold">Permanently delete this lead?</p>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={() => { onDelete(lead.id); setConfirmDeleteId(null); }} className="text-xs font-bold uppercase bg-red-600 text-white px-3 py-1.5 rounded-lg">Delete</button>
+                    <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold uppercase bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <a href={`tel:${lead.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
+                  <a href={`sms:${lead.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
+                  <button
+                    onClick={() => onReopen(lead.id)}
+                    className="text-xs font-bold uppercase bg-yellow-500 text-white px-3 py-1.5 rounded-lg hover:bg-yellow-600 transition-colors"
+                  >
+                    Re-open Lead
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(lead.id)}
+                    className="text-xs font-bold uppercase bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-red-100 hover:text-red-600 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
-          );
-        })
+          ))}
+        </div>
       )}
     </div>
   );
