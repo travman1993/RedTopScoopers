@@ -139,6 +139,7 @@ export default function AdminDashboard() {
       frequency: editingCustomer.frequency,
       deodorizing: editingCustomer.deodorizing,
       schedule_day: editingCustomer.schedule_day || null,
+      start_date: editingCustomer.start_date || null,
       monthly_rate: parseInt(editingCustomer.monthly_rate, 10) || 0,
       notes: editingCustomer.notes,
       updated_at: new Date().toISOString(),
@@ -148,6 +149,31 @@ export default function AdminDashboard() {
       await supabase.from('customers').update(updates).eq('id', id);
     }
     setEditingCustomer(null);
+  };
+
+  const addCustomer = async (data) => {
+    const newCustomer = {
+      first_name: data.first_name,
+      last_name: data.last_name,
+      phone: data.phone,
+      email: data.email || null,
+      address: data.address,
+      dogs: parseInt(data.dogs, 10) || 1,
+      yard_size: data.yard_size,
+      frequency: data.frequency,
+      deodorizing: data.deodorizing,
+      schedule_day: data.schedule_day || null,
+      start_date: data.start_date || null,
+      monthly_rate: parseInt(data.monthly_rate, 10) || 0,
+      notes: data.notes || null,
+      is_active: true,
+    };
+    if (isSupabaseConfigured()) {
+      const { data: inserted } = await supabase.from('customers').insert([newCustomer]).select().single();
+      if (inserted) setCustomers((prev) => [inserted, ...prev]);
+    } else {
+      setCustomers((prev) => [{ ...newCustomer, id: Date.now() }, ...prev]);
+    }
   };
 
   const deleteCustomer = async (id) => {
@@ -284,6 +310,7 @@ export default function AdminDashboard() {
             setEditingCustomer={setEditingCustomer}
             onSaveCustomer={saveCustomer}
             onDeleteCustomer={deleteCustomer}
+            onAddCustomer={addCustomer}
           />
         )}
         {activeTab === 'schedule' && <ScheduleTab customers={customers} />}
@@ -708,17 +735,160 @@ function LeadsTab({ leads, statusFilter, setStatusFilter, onUpdateStatus, editin
 
 // ─── CUSTOMERS TAB ────────────────────────────────────────────────────────────
 
-function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer }) {
-  const recurring = customers.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
-  const onetimes = customers.filter((c) => c.frequency === 'onetime' || c.frequency === 'deodorizing_only');
+const BLANK_CUSTOMER = {
+  first_name: '', last_name: '', phone: '', email: '', address: '',
+  dogs: '1', yard_size: 'small', frequency: 'weekly', deodorizing: false,
+  schedule_day: '', start_date: '', monthly_rate: '', notes: '',
+};
+
+function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer, onAddCustomer }) {
+  const [search, setSearch] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState(BLANK_CUSTOMER);
+  const [addSaving, setAddSaving] = useState(false);
+
+  const q = search.toLowerCase();
+  const filtered = q
+    ? customers.filter((c) =>
+        `${c.first_name} ${c.last_name}`.toLowerCase().includes(q) ||
+        (c.address || '').toLowerCase().includes(q) ||
+        (c.phone || '').includes(q) ||
+        (c.email || '').toLowerCase().includes(q)
+      )
+    : customers;
+
+  const recurring = filtered.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
+  const onetimes = filtered.filter((c) => c.frequency === 'onetime' || c.frequency === 'deodorizing_only');
+
+  const setAdd = (field) => (e) =>
+    setAddForm((p) => ({ ...p, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    setAddSaving(true);
+    await onAddCustomer(addForm);
+    setAddForm(BLANK_CUSTOMER);
+    setShowAdd(false);
+    setAddSaving(false);
+  };
+
+  const isAddRecurring = addForm.frequency !== 'onetime' && addForm.frequency !== 'deodorizing_only';
 
   return (
     <div className="space-y-6">
-      <h2 className="font-heading text-xl font-bold text-gray-900">Customers</h2>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="font-heading text-xl font-bold text-gray-900">Customers</h2>
+        <button
+          onClick={() => setShowAdd((v) => !v)}
+          className="text-xs font-bold uppercase bg-brand-green text-white px-4 py-2 rounded-lg hover:bg-brand-green-light transition-colors"
+        >
+          {showAdd ? 'Cancel' : '+ Add Customer'}
+        </button>
+      </div>
 
-      {customers.length === 0 ? (
+      {/* Search */}
+      <div className="relative">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, address, or phone..."
+          className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
+        />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Add Customer Form */}
+      {showAdd && (
+        <form onSubmit={handleAdd} className="bg-white rounded-xl border-2 border-brand-green/30 p-5 space-y-3">
+          <p className="text-sm font-bold uppercase tracking-wider text-brand-green mb-2">New Customer</p>
+          <div className="grid grid-cols-2 gap-2">
+            <EditField label="First Name *" value={addForm.first_name} onChange={setAdd('first_name')} />
+            <EditField label="Last Name *" value={addForm.last_name} onChange={setAdd('last_name')} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <EditField label="Phone *" value={addForm.phone} onChange={setAdd('phone')} type="tel" />
+            <EditField label="Email" value={addForm.email} onChange={setAdd('email')} type="email" />
+          </div>
+          <EditField label="Address *" value={addForm.address} onChange={setAdd('address')} />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Dogs</label>
+              <select value={addForm.dogs} onChange={setAdd('dogs')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
+                {['1','2','3','4','5'].map((n) => <option key={n} value={n}>{n} dog{n !== '1' ? 's' : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Yard Size</label>
+              <select value={addForm.yard_size} onChange={setAdd('yard_size')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
+                {['small','medium','large','xl'].map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Service Type</label>
+              <select value={addForm.frequency} onChange={setAdd('frequency')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Bi-Weekly</option>
+                <option value="onetime">One-Time</option>
+                <option value="deodorizing_only">Deodorizing Only</option>
+              </select>
+            </div>
+            {isAddRecurring ? (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Service Day</label>
+                <select value={addForm.schedule_day} onChange={setAdd('schedule_day')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
+                  <option value="">Unscheduled</option>
+                  {DAYS.map((d) => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                </select>
+              </div>
+            ) : (
+              <EditField label="Appointment Date" value={addForm.start_date} onChange={setAdd('start_date')} type="date" />
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2 items-end">
+            <EditField label="Monthly Rate ($)" value={addForm.monthly_rate} onChange={setAdd('monthly_rate')} type="number" />
+            <label className="flex items-center gap-2 pb-1.5 cursor-pointer">
+              <input type="checkbox" checked={addForm.deodorizing} onChange={setAdd('deodorizing')} className="w-4 h-4 rounded border-gray-300 text-brand-green" />
+              <span className="text-sm font-semibold text-gray-700">Deodorizing</span>
+            </label>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
+            <textarea value={addForm.notes} onChange={setAdd('notes')} rows={2}
+              className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full resize-none"
+              placeholder="Gate code, dog names, instructions..." />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="submit" disabled={addSaving || !addForm.first_name || !addForm.last_name || !addForm.phone || !addForm.address}
+              className="text-xs font-bold uppercase bg-brand-green text-white px-4 py-2 rounded-lg disabled:opacity-40">
+              {addSaving ? 'Saving...' : 'Save Customer'}
+            </button>
+            <button type="button" onClick={() => { setShowAdd(false); setAddForm(BLANK_CUSTOMER); }}
+              className="text-xs font-bold uppercase bg-gray-300 text-gray-700 px-3 py-2 rounded-lg">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {customers.length === 0 && !showAdd ? (
         <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-          <p className="text-gray-400">No customers yet. Approve a lead to add them here.</p>
+          <p className="text-gray-400">No customers yet. Approve a lead or add one manually above.</p>
+        </div>
+      ) : filtered.length === 0 && search ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+          <p className="text-gray-400">No customers match &ldquo;{search}&rdquo;</p>
         </div>
       ) : (
         <>
@@ -758,6 +928,7 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
     frequency: c.frequency || 'weekly',
     deodorizing: c.deodorizing || false,
     schedule_day: c.schedule_day || '',
+    start_date: c.start_date || '',
     monthly_rate: String(c.monthly_rate || c.quoted_monthly || ''),
     notes: c.notes || '',
   });
@@ -843,13 +1014,23 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
                 <option value="deodorizing_only">Deodorizing Only</option>
               </select>
             </div>
-            {isRecurring && (
+            {isRecurring ? (
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Service Day</label>
                 <select value={ec.schedule_day} onChange={set('schedule_day')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
                   <option value="">Unscheduled</option>
                   {DAYS.map((d) => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
                 </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Appointment Date</label>
+                <input
+                  type="date"
+                  value={ec.start_date}
+                  onChange={set('start_date')}
+                  className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full"
+                />
               </div>
             )}
           </div>
@@ -1020,14 +1201,178 @@ function ScheduleTab({ customers }) {
 
 // ─── FOLLOW-UP TAB ───────────────────────────────────────────────────────────
 
-function FollowUpTab({ leads, onReopen, onDelete }) {
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+const FOLLOWUP_SEQUENCE = [
+  { days: 2,   label: 'Day 2',    msg: (n) => `Hey ${n}! It's Travis with Red Top Scoopers 🐾 Just wanted to follow up and see if you had any questions about our service. We'd love to get your yard looking great — no contracts, cancel anytime. Let me know!` },
+  { days: 4,   label: 'Day 4',    msg: (n) => `Hey ${n}! Travis from Red Top Scoopers again 🐾 Still thinking it over? Totally understand! We make it super easy — just say the word and we'll get you on the schedule. Happy to answer any questions!` },
+  { days: 7,   label: 'Week 1',   msg: (n) => `Hi ${n}! Travis here from Red Top Scoopers 🐾 It's been about a week — just reaching out one more time. We're taking new customers in your area and would love to add you to the family!` },
+  { days: 14,  label: 'Week 2',   msg: (n) => `Hey ${n}! Travis with Red Top Scoopers 🐾 Hope things are great! Spring is the perfect time to get a fresh start in the yard. We've got great availability right now — would love to get you scheduled!` },
+  { days: 30,  label: '1 Month',  msg: (n) => `Hey ${n}! Travis from Red Top Scoopers here 🐾 Just checking in — it's been about a month. No pressure at all, just want you to know we're still here if you ever need us. Weekly, bi-weekly, and one-time cleanups available!` },
+  { days: 60,  label: '2 Months', msg: (n) => `Hi ${n}! Travis with Red Top Scoopers 🐾 Hope you've been well! If things have changed and you'd like to try our service, we'd love to take care of your yard. Reach out anytime — no pressure!` },
+  { days: 90,  label: '3 Months', msg: (n) => `Hey ${n}! Travis from Red Top Scoopers 🐾 Checking in after a few months — we have great scheduling availability and would love to have you as a customer. No contracts, easy cancel. Let me know if you're interested!` },
+  { days: 180, label: '6 Months', msg: (n) => `Hi ${n}! Travis with Red Top Scoopers 🐾 It's been a while — just one final note. If you ever need pet waste cleanup, we're always here. No contracts, we work around your schedule. Would love to help anytime!` },
+];
 
+function FollowUpLeadCard({ lead, onReopen, onDelete }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const storageKey = `rts_followup_${lead.id}`;
+  const [sentSteps, setSentSteps] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(storageKey) || '[]')); }
+    catch { return new Set(); }
+  });
+
+  const markSent = (i) => setSentSteps((prev) => {
+    const next = new Set([...prev, i]);
+    try { localStorage.setItem(storageKey, JSON.stringify([...next])); } catch {}
+    return next;
+  });
+
+  const declinedAt = lead.updated_at ? new Date(lead.updated_at) : new Date();
+  const daysElapsed = Math.floor((Date.now() - declinedAt.getTime()) / (1000 * 60 * 60 * 24));
+
+  const sep = typeof window !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent) ? '&' : '?';
+
+  // Find the current "active" step — most recent due step not yet sent
+  const activeStep = [...FOLLOWUP_SEQUENCE].reverse().find((s, ri) => {
+    const i = FOLLOWUP_SEQUENCE.length - 1 - ri;
+    return daysElapsed >= s.days && !sentSteps.has(i);
+  });
+  const activeIndex = activeStep ? FOLLOWUP_SEQUENCE.indexOf(activeStep) : -1;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-bold text-gray-900">{lead.first_name} {lead.last_name}</h3>
+            <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700">Declined</span>
+            {(lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only') && (
+              <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">One-Time</span>
+            )}
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5">{lead.address}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {lead.frequency} · {lead.dogs || 1} dog{(lead.dogs || 1) !== 1 ? 's' : ''} · {lead.yard_size} yard
+            {lead.heard_about ? ` · via ${lead.heard_about}` : ''}
+            {' · '}<span className="font-semibold text-gray-500">Day {daysElapsed} since declined</span>
+          </p>
+        </div>
+        <p className="font-heading font-bold text-gray-400 text-sm flex-shrink-0 ml-2">
+          ${lead.quoted_monthly}{lead.frequency !== 'onetime' ? '/mo' : ' flat'}
+        </p>
+      </div>
+
+      {lead.notes && (
+        <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3 text-xs text-amber-800">
+          <span className="font-bold">Notes:</span> {lead.notes}
+        </div>
+      )}
+
+      {/* Follow-up sequence timeline */}
+      <div className="mb-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Follow-Up Sequence</p>
+        <div className="space-y-1.5">
+          {FOLLOWUP_SEQUENCE.map((step, i) => {
+            const isDue = daysElapsed >= step.days;
+            const isSent = sentSteps.has(i);
+            const isActive = i === activeIndex;
+            const smsLink = `sms:${lead.phone}${sep}body=${encodeURIComponent(step.msg(lead.first_name))}`;
+
+            return (
+              <div
+                key={i}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${
+                  isSent
+                    ? 'bg-green-50 border-green-200 opacity-60'
+                    : isActive
+                    ? 'bg-blue-50 border-blue-300 shadow-sm'
+                    : isDue
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-gray-50 border-gray-100'
+                }`}
+              >
+                {/* Status icon */}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
+                  isSent ? 'bg-green-500 text-white' :
+                  isActive ? 'bg-blue-500 text-white' :
+                  isDue ? 'bg-amber-400 text-white' :
+                  'bg-gray-200 text-gray-400'
+                }`}>
+                  {isSent ? '✓' : i + 1}
+                </div>
+
+                {/* Label */}
+                <div className="flex-1 min-w-0">
+                  <span className={`text-xs font-bold ${
+                    isSent ? 'text-green-700' :
+                    isActive ? 'text-blue-700' :
+                    isDue ? 'text-amber-700' :
+                    'text-gray-400'
+                  }`}>
+                    {step.label}
+                    {isActive && <span className="ml-1 text-blue-500">← Due now</span>}
+                    {isSent && <span className="ml-1 font-normal text-green-600">Sent</span>}
+                    {!isDue && !isSent && <span className="ml-1 font-normal text-gray-400">(in {step.days - daysElapsed}d)</span>}
+                  </span>
+                </div>
+
+                {/* Action buttons */}
+                {!isSent && isDue && (
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <a
+                      href={smsLink}
+                      className={`text-xs font-bold uppercase px-2.5 py-1 rounded-lg text-white transition-colors ${
+                        isActive ? 'bg-blue-500 hover:bg-blue-600' : 'bg-amber-500 hover:bg-amber-600'
+                      }`}
+                    >
+                      Send Text
+                    </a>
+                    <button
+                      onClick={() => markSent(i)}
+                      className="text-xs font-bold uppercase px-2 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                    >
+                      ✓
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      {confirmDelete ? (
+        <div className="border border-red-200 bg-red-50 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
+          <p className="text-xs text-red-700 font-semibold">Permanently delete this lead?</p>
+          <div className="flex gap-2 flex-shrink-0">
+            <button onClick={() => onDelete(lead.id)} className="text-xs font-bold uppercase bg-red-600 text-white px-3 py-1.5 rounded-lg">Delete</button>
+            <button onClick={() => setConfirmDelete(false)} className="text-xs font-bold uppercase bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <a href={`tel:${lead.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
+          <a href={`sms:${lead.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
+          <button onClick={() => onReopen(lead.id)} className="text-xs font-bold uppercase bg-yellow-500 text-white px-3 py-1.5 rounded-lg hover:bg-yellow-600 transition-colors">
+            Re-open Lead
+          </button>
+          <button onClick={() => setConfirmDelete(true)} className="text-xs font-bold uppercase bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-red-100 hover:text-red-600 transition-colors ml-auto">
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FollowUpTab({ leads, onReopen, onDelete }) {
   return (
     <div className="space-y-4">
       <div>
         <h2 className="font-heading text-xl font-bold text-gray-900">Follow-Up</h2>
-        <p className="text-sm text-gray-500 mt-0.5">Declined leads — reach back out or clean up.</p>
+        <p className="text-sm text-gray-500 mt-0.5">Declined leads — work the sequence to win them back.</p>
       </div>
 
       {leads.length === 0 ? (
@@ -1037,60 +1382,7 @@ function FollowUpTab({ leads, onReopen, onDelete }) {
       ) : (
         <div className="space-y-3">
           {leads.map((lead) => (
-            <div key={lead.id} className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-gray-900">{lead.first_name} {lead.last_name}</h3>
-                    <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700">Declined</span>
-                    {(lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only') && (
-                      <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">One-Time</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500 mt-0.5">{lead.address}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {lead.frequency} · {lead.dogs || 1} dog{(lead.dogs || 1) !== 1 ? 's' : ''} · {lead.yard_size} yard
-                    {lead.heard_about ? ` · via ${lead.heard_about}` : ''}
-                  </p>
-                </div>
-                <p className="font-heading font-bold text-gray-400 text-sm flex-shrink-0 ml-2">
-                  ${lead.quoted_monthly}{lead.frequency !== 'onetime' ? '/mo' : ' flat'}
-                </p>
-              </div>
-
-              {lead.notes && (
-                <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3 text-xs text-amber-800">
-                  <span className="font-bold">Notes:</span> {lead.notes}
-                </div>
-              )}
-
-              {confirmDeleteId === lead.id ? (
-                <div className="border border-red-200 bg-red-50 rounded-lg px-3 py-2.5 flex items-center justify-between gap-3">
-                  <p className="text-xs text-red-700 font-semibold">Permanently delete this lead?</p>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={() => { onDelete(lead.id); setConfirmDeleteId(null); }} className="text-xs font-bold uppercase bg-red-600 text-white px-3 py-1.5 rounded-lg">Delete</button>
-                    <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold uppercase bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg">Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  <a href={`tel:${lead.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
-                  <a href={`sms:${lead.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
-                  <button
-                    onClick={() => onReopen(lead.id)}
-                    className="text-xs font-bold uppercase bg-yellow-500 text-white px-3 py-1.5 rounded-lg hover:bg-yellow-600 transition-colors"
-                  >
-                    Re-open Lead
-                  </button>
-                  <button
-                    onClick={() => setConfirmDeleteId(lead.id)}
-                    className="text-xs font-bold uppercase bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-red-100 hover:text-red-600 transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
-            </div>
+            <FollowUpLeadCard key={lead.id} lead={lead} onReopen={onReopen} onDelete={onDelete} />
           ))}
         </div>
       )}
