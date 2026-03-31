@@ -641,7 +641,10 @@ function LeadsTab({ leads, statusFilter, setStatusFilter, onUpdateStatus, editin
                   <a href={`tel:${lead.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">
                     Call
                   </a>
-                  <a href={`sms:${lead.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">
+                  <a
+                    href={`sms:${lead.phone}${typeof window !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent) ? '&' : '?'}body=${encodeURIComponent(`Hey ${lead.first_name}! This is Travis with Red Top Scoopers 🐾 I saw your inquiry and wanted to reach out — I'll be giving you a call shortly to go over the details. We'd love to add you to the family! Talk soon.`)}`}
+                    className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors"
+                  >
                     Text
                   </a>
                   <button
