@@ -7,54 +7,10 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-const DEMO_LEADS = [
-  {
-    id: 1,
-    first_name: 'Demo',
-    last_name: 'Customer',
-    phone: '(770) 555-0001',
-    email: 'demo@test.com',
-    address: '123 Main St, Cartersville, GA',
-    dogs: 2,
-    yard_size: 'large',
-    frequency: 'weekly',
-    deodorizing: true,
-    preferred_day: 'tuesday',
-    heard_about: 'facebook',
-    last_cleaned: 'over_month',
-    notes: 'Gate code: 1234. One dog is protective of the yard.',
-    quoted_monthly: 115,
-    quoted_weekly: 29,
-    is_heavy_cleanup: true,
-    status: 'new',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    first_name: 'Demo',
-    last_name: 'One-Time',
-    phone: '(770) 555-0002',
-    email: '',
-    address: '456 Oak Dr, Emerson, GA',
-    dogs: 1,
-    yard_size: 'small',
-    frequency: 'onetime',
-    deodorizing: false,
-    preferred_day: '',
-    heard_about: 'google',
-    last_cleaned: '2_4_weeks',
-    notes: '',
-    quoted_monthly: 52,
-    quoted_weekly: 13,
-    is_heavy_cleanup: false,
-    status: 'new',
-    created_at: new Date().toISOString(),
-  },
-];
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('today');
-  const [leads, setLeads] = useState(DEMO_LEADS);
+  const [leads, setLeads] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -73,7 +29,7 @@ export default function AdminDashboard() {
       supabase.from('customers').select('*').eq('is_active', true).order('created_at', { ascending: false }),
     ]);
     if (leadsRes.data) {
-      setLeads(leadsRes.data.filter((l) => l.status !== 'declined'));
+      setLeads(leadsRes.data.filter((l) => l.status !== 'declined' && l.status !== 'approved'));
       setDeclinedLeads(leadsRes.data.filter((l) => l.status === 'declined'));
     }
     if (customersRes.data) setCustomers(customersRes.data);

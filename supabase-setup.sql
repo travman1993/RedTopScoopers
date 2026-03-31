@@ -84,6 +84,16 @@ CREATE POLICY "Allow anon read leads"
   TO anon
   USING (true);
 
+CREATE POLICY "Allow anon update leads"
+  ON leads FOR UPDATE
+  TO anon
+  USING (true);
+
+CREATE POLICY "Allow anon delete leads"
+  ON leads FOR DELETE
+  TO anon
+  USING (true);
+
 CREATE POLICY "Allow anon all customers"
   ON customers FOR ALL
   TO anon
