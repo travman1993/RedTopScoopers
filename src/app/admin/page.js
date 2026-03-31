@@ -29,8 +29,10 @@ export default function AdminDashboard() {
       supabase.from('customers').select('*').eq('is_active', true).order('created_at', { ascending: false }),
     ]);
     if (leadsRes.data) {
-      setLeads(leadsRes.data.filter((l) => l.status !== 'declined' && l.status !== 'approved'));
-      setDeclinedLeads(leadsRes.data.filter((l) => l.status === 'declined'));
+      const active = leadsRes.data.filter((l) => l.status !== 'declined' && l.status !== 'approved' && l.status !== 'deleted');
+      const declined = leadsRes.data.filter((l) => l.status === 'declined');
+      setLeads(active);
+      setDeclinedLeads(declined);
     }
     if (customersRes.data) setCustomers(customersRes.data);
     setLoading(false);
@@ -159,7 +161,8 @@ export default function AdminDashboard() {
     setLeads((prev) => prev.filter((l) => l.id !== id));
     setDeclinedLeads((prev) => prev.filter((l) => l.id !== id));
     if (isSupabaseConfigured()) {
-      await supabase.from('leads').delete().eq('id', id);
+      // Soft-delete: can't hard-delete leads because customers table references lead_id via foreign key
+      await supabase.from('leads').update({ status: 'deleted', updated_at: new Date().toISOString() }).eq('id', id);
     }
   };
 
