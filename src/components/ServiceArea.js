@@ -14,28 +14,17 @@ const SERVICE_AREAS = [
 ];
 
 export default function ServiceArea() {
-  // Center of service area (roughly Cartersville)
   const centerLat = 34.22;
   const centerLng = -84.88;
-  const zoom = 10;
 
-  // Google Maps static embed URL (free, no API key needed for embed)
   const mapSrc = `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d200000!2d${centerLng}!3d${centerLat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2sus`;
 
   return (
-    <section className="relative overflow-hidden">
-      {/* Background */}
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage: `url('https://images2.minutemediacdn.com/image/upload/c_fill,w_2160,ar_16:9,f_auto,q_auto,g_auto/shape%2Fcover%2Fsport%2Fistock-498015683-f73dd7466de875ab56ea505c35da4467.jpg')`,
-        }}
-      />
-      <div className="absolute inset-0 bg-white/30" />
-
-      <div className="relative section-padding">
+    <section className="bg-brand-green/80">
+      <div className="section-padding">
         <div className="container-narrow">
           <div className="text-center mb-10">
+            <p className="font-heading text-sm uppercase tracking-widest text-green-300 mb-3">Service Area</p>
             <h2 className="font-heading text-3xl md:text-5xl font-bold text-white mb-3">
               Serving Northwest Georgia
             </h2>
@@ -45,7 +34,6 @@ export default function ServiceArea() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-8 items-center max-w-5xl mx-auto">
-            {/* Map */}
             <div className="rounded-2xl overflow-hidden shadow-2xl border-4 border-white/20">
               <iframe
                 src={mapSrc}
@@ -60,13 +48,12 @@ export default function ServiceArea() {
               />
             </div>
 
-            {/* Area list */}
             <div>
               <div className="grid grid-cols-2 gap-3">
                 {SERVICE_AREAS.map((area) => (
                   <div
                     key={area.name}
-                    className="flex items-center gap-2 bg-white/15 backdrop-blur-sm text-white 
+                    className="flex items-center gap-2 bg-white/15 backdrop-blur-sm text-white
                                font-semibold text-sm px-4 py-3 rounded-xl border border-white/20
                                hover:bg-white/25 transition-colors"
                   >
@@ -78,8 +65,10 @@ export default function ServiceArea() {
                 ))}
               </div>
 
-              <p className="text-sm text-green-200 mt-6">
-                Don&apos;t see your area? <a href="#quote" className="text-white font-bold underline hover:no-underline">Contact us</a> — we may still be able to help.
+              <p className="text-sm text-green-00 mt-6">
+                Don&apos;t see your area?{' '}
+                <a href="#quote" className="text-white font-bold underline hover:no-underline">Contact us</a>
+                {' '}— we may still be able to help.
               </p>
             </div>
           </div>
