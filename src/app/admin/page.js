@@ -1277,8 +1277,11 @@ function EditField({ label, value, onChange, type = 'text' }) {
 
 function ScheduleTab({ customers }) {
   const [overrides, setOverrides] = useState({});
-  const [draggedItem, setDraggedItem] = useState(null);
-  const [dragOverDate, setDragOverDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const t = new Date(); t.setHours(0,0,0,0);
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  });
+  const [movingStop, setMovingStop] = useState(null); // { customerId, originalDate, customerName }
 
   // Load overrides from Supabase on mount, fall back to localStorage
   useEffect(() => {
@@ -1312,12 +1315,17 @@ function ScheduleTab({ customers }) {
   today.setHours(0, 0, 0, 0);
   const todayStr = toDateStr(today);
 
-  // Generate 63 days (9 weeks) from today
-  const dates = Array.from({ length: 63 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
+  // Build Mon–Sat calendar grid (9 weeks)
+  const calendarStart = new Date(today);
+  const dow = calendarStart.getDay();
+  calendarStart.setDate(calendarStart.getDate() + (dow === 0 ? -6 : 1 - dow));
+  const weeks = Array.from({ length: 9 }, (_, wi) =>
+    Array.from({ length: 6 }, (_, di) => {
+      const d = new Date(calendarStart);
+      d.setDate(calendarStart.getDate() + wi * 7 + di);
+      return d;
+    })
+  );
 
   const isRecurringScheduledOn = (customer, date) => {
     if (!customer.is_active) return false;
@@ -1343,7 +1351,13 @@ function ScheduleTab({ customers }) {
       const key = `${c.id}|${dateStr}`;
       // If overridden away from this date, skip
       if (overrides[key]) continue;
-      if (isRecurringScheduledOn(c, date)) {
+      // Skip if this customer has been rescheduled TO this date (override loop handles it)
+      const hasIncomingOverride = Object.entries(overrides).some(([key, val]) => {
+        if (val !== dateStr) return false;
+        const [oid] = key.split('|');
+        return oid === String(c.id);
+      });
+      if (!hasIncomingOverride && isRecurringScheduledOn(c, date)) {
         stops.push({ customer: c, originalDate: dateStr, isOverride: false, isOnetime: false });
       }
     }
@@ -1386,25 +1400,20 @@ function ScheduleTab({ customers }) {
     }
   };
 
-  const handleDragStart = (e, customerId, originalDate) => {
-    setDraggedItem({ customerId: String(customerId), originalDate });
-    e.dataTransfer.effectAllowed = 'move';
+  const handlePickStop = (customerId, originalDate, customerName) => {
+    if (movingStop && movingStop.customerId === String(customerId) && movingStop.originalDate === originalDate) {
+      setMovingStop(null); // tap same stop again = cancel
+    } else {
+      setMovingStop({ customerId: String(customerId), originalDate, customerName });
+    }
   };
 
-  const handleDragOver = (e, dateStr) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverDate(dateStr);
-  };
-
-  const handleDrop = (e, targetDateStr) => {
-    e.preventDefault();
-    if (!draggedItem) return;
-    if (draggedItem.originalDate === targetDateStr) { setDraggedItem(null); setDragOverDate(null); return; }
-    const key = `${draggedItem.customerId}|${draggedItem.originalDate}`;
-    saveOverrides({ ...overrides, [key]: targetDateStr }, draggedItem.customerId, draggedItem.originalDate, targetDateStr);
-    setDraggedItem(null);
-    setDragOverDate(null);
+  const handleDropOnDate = (targetDateStr) => {
+    if (!movingStop) return;
+    if (movingStop.originalDate === targetDateStr) { setMovingStop(null); return; }
+    const key = `${movingStop.customerId}|${movingStop.originalDate}`;
+    saveOverrides({ ...overrides, [key]: targetDateStr }, movingStop.customerId, movingStop.originalDate, targetDateStr);
+    setMovingStop(null);
   };
 
   const resetOverride = (customerId, originalDate) => {
@@ -1414,126 +1423,177 @@ function ScheduleTab({ customers }) {
     saveOverrides(next, customerId, originalDate, null, true);
   };
 
+  const selDateObj = selectedDate ? new Date(selectedDate + 'T12:00:00') : null;
+  const selStops = selDateObj ? getStopsForDate(selDateObj) : [];
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between">
         <h2 className="font-heading text-xl font-bold text-gray-900">Schedule</h2>
-        <span className="text-xs text-gray-400">Next 63 days</span>
+        <span className="text-xs text-gray-400">Tap day · Drag to reschedule</span>
       </div>
-      <p className="text-xs text-gray-500 mb-3">Drag any stop to a different day to reschedule that visit. The recurring schedule stays intact.</p>
 
-      {dates.map((date) => {
-        const dateStr = toDateStr(date);
-        const stops = getStopsForDate(date);
-        const isToday = dateStr === todayStr;
-        const isDragTarget = dragOverDate === dateStr;
-        const hasStops = stops.length > 0;
-        const dayLabel = date.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
-        const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      {/* Moving banner */}
+      {movingStop && (
+        <div className="rounded-xl bg-brand-red text-white px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="font-bold text-sm">Moving: {movingStop.customerName}</p>
+            <p className="text-xs text-white/70">Tap any day on the calendar to reschedule this one visit</p>
+          </div>
+          <button onClick={() => setMovingStop(null)} className="text-white/70 hover:text-white text-lg font-bold ml-3">✕</button>
+        </div>
+      )}
 
-        return (
-          <div
-            key={dateStr}
-            className={`rounded-xl border overflow-hidden transition-all ${
-              isDragTarget
-                ? 'border-brand-green ring-2 ring-brand-green ring-opacity-40'
-                : hasStops
-                ? 'border-gray-200'
-                : 'border-gray-100'
-            }`}
-            onDragOver={(e) => handleDragOver(e, dateStr)}
-            onDrop={(e) => handleDrop(e, dateStr)}
-            onDragLeave={() => setDragOverDate(null)}
-          >
-            <div className={`px-4 py-2 flex items-center justify-between ${
-              isDragTarget ? 'bg-green-100' : hasStops ? 'bg-brand-green' : 'bg-gray-100'
-            }`}>
-              <div className="flex items-center gap-2">
-                <span className={`font-heading text-sm font-bold uppercase tracking-wider ${
-                  isDragTarget ? 'text-brand-green' : hasStops ? 'text-white' : 'text-gray-500'
-                }`}>
-                  {dayLabel}
-                </span>
-                <span className={`text-xs ${
-                  isDragTarget ? 'text-brand-green' : hasStops ? 'text-white/70' : 'text-gray-400'
-                }`}>
-                  {dateLabel}
-                </span>
-                {isToday && (
-                  <span className="text-xs bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded font-bold leading-none">
-                    Today
-                  </span>
-                )}
-              </div>
-              {hasStops && !isDragTarget && (
-                <span className="text-xs text-white/70">{stops.length} stop{stops.length !== 1 ? 's' : ''}</span>
-              )}
-              {isDragTarget && (
-                <span className="text-xs text-brand-green font-semibold">Drop here</span>
-              )}
-            </div>
+      {/* Calendar grid */}
+      <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+        {/* Day-of-week headers */}
+        <div className="grid grid-cols-6 bg-gray-50 border-b border-gray-200">
+          {['Mon','Tue','Wed','Thu','Fri','Sat'].map((d) => (
+            <div key={d} className="py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">{d}</div>
+          ))}
+        </div>
 
-            <div className={`p-3 ${isDragTarget ? 'bg-green-50' : hasStops ? 'bg-white' : 'bg-gray-50'}`}>
-              {hasStops ? (
-                <div className="space-y-2">
-                  {stops.map((stop) => (
-                    <div
-                      key={`${stop.customer.id}|${stop.originalDate}`}
-                      draggable={!stop.isOnetime}
-                      onDragStart={(e) => !stop.isOnetime && handleDragStart(e, stop.customer.id, stop.originalDate)}
-                      onDragEnd={() => { setDraggedItem(null); setDragOverDate(null); }}
-                      className={`text-sm flex items-start gap-2 border-b border-gray-100 last:border-0 pb-2 last:pb-0 ${
-                        !stop.isOnetime ? 'cursor-grab active:cursor-grabbing' : ''
-                      } ${stop.isOverride ? 'bg-amber-50 rounded-lg px-2 py-1' : ''}`}
-                    >
-                      {!stop.isOnetime && (
-                        <span className="text-gray-300 select-none mt-0.5 text-base leading-none">⠿</span>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-semibold text-gray-900">{stop.customer.first_name} {stop.customer.last_name}</p>
-                          {stop.isOverride && (
-                            <span className="text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-semibold">Rescheduled</span>
-                          )}
-                          {stop.isOnetime && (
-                            <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">One-time</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 truncate">{stop.customer.address}</p>
-                        <p className="text-xs text-gray-400">
-                          {stop.customer.dogs || 1} dog{(stop.customer.dogs || 1) !== 1 ? 's' : ''} · {stop.customer.yard_size}
-                          {stop.customer.deodorizing && ' · +Deodorizing'}
-                        </p>
-                        {stop.customer.notes && (
-                          <p className="text-xs text-amber-700 mt-0.5">Notes: {stop.customer.notes}</p>
-                        )}
-                        {stop.isOverride && (
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            Originally: {new Date(stop.originalDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </p>
-                        )}
+        {/* Weeks */}
+        {weeks.map((week, wi) => {
+          // Check if any day in this week has stops (for rendering optimization)
+          const monthStart = week.find((d) => d.getDate() === 1);
+          return (
+            <div key={wi} className="grid grid-cols-6 border-b border-gray-100 last:border-0">
+              {week.map((date) => {
+                const dateStr = toDateStr(date);
+                const stops = getStopsForDate(date);
+                const isToday = dateStr === todayStr;
+                const isPast = date < today;
+                const isSelected = dateStr === selectedDate;
+                const isDragTarget = dragOverDate === dateStr;
+                const showMonthLabel = date.getDate() === 1;
+
+                return (
+                  <div
+                    key={dateStr}
+                    onClick={() => { if (movingStop) { handleDropOnDate(dateStr); } else { setSelectedDate(dateStr); } }}
+                    className={`min-h-[64px] p-1 border-r border-gray-100 last:border-r-0 cursor-pointer transition-colors ${
+                      movingStop ? 'hover:bg-green-100 hover:ring-2 hover:ring-inset hover:ring-brand-green' : ''
+                    } ${
+                      isSelected && !movingStop ? 'bg-green-50' :
+                      isPast ? 'bg-gray-50/60' : 'bg-white'
+                    }`}
+                  >
+                    {showMonthLabel && (
+                      <div className="text-xs font-bold text-brand-green leading-none mb-0.5">
+                        {date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
                       </div>
-                      {stop.isOverride && (
-                        <button
-                          onClick={() => resetOverride(stop.customer.id, stop.originalDate)}
-                          className="text-xs text-red-400 hover:text-red-600 shrink-0 mt-0.5 font-semibold"
-                          title="Undo reschedule"
+                    )}
+                    <div className={`text-xs font-bold mb-1 w-5 h-5 flex items-center justify-center rounded-full ${
+                      isToday ? 'bg-brand-red text-white' : isPast ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      {date.getDate()}
+                    </div>
+                    <div className="space-y-0.5">
+                      {stops.slice(0, 2).map((stop, si) => (
+                        <div
+                          key={`${stop.customer.id}|${stop.originalDate}|${si}`}
+                          onClick={(e) => { e.stopPropagation(); if (!stop.isOnetime) handlePickStop(stop.customer.id, stop.originalDate, stop.customer.first_name + ' ' + stop.customer.last_name); }}
+                          className={`text-xs px-1 py-0.5 rounded truncate leading-tight font-medium transition-all ${
+                            movingStop && movingStop.customerId === String(stop.customer.id) && movingStop.originalDate === stop.originalDate
+                              ? 'ring-2 ring-brand-red bg-red-100 text-red-800'
+                              : stop.isOnetime ? 'bg-blue-100 text-blue-800' :
+                                stop.isOverride ? 'bg-amber-100 text-amber-800' :
+                                'bg-green-100 text-green-800'
+                          } ${!stop.isOnetime ? 'cursor-pointer active:scale-95' : ''}`}
                         >
-                          ↩ Undo
-                        </button>
+                          {stop.customer.first_name} {stop.customer.last_name.charAt(0)}.
+                        </div>
+                      ))}
+                      {stops.length > 2 && (
+                        <div className="text-xs text-gray-400 leading-none pl-0.5">+{stops.length - 2}</div>
                       )}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 py-1">
-                  {isDragTarget ? 'Release to reschedule here' : 'No stops scheduled'}
-                </p>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex gap-3 text-xs text-gray-500 px-1">
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-green-100 inline-block" />Recurring</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-100 inline-block" />One-time</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-100 inline-block" />Rescheduled</span>
+      </div>
+
+      {/* Selected day detail panel */}
+      {selectedDate && (
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className={`px-4 py-3 flex items-center justify-between ${selStops.length > 0 ? 'bg-brand-green' : 'bg-gray-100'}`}>
+            <div className="flex items-center gap-2">
+              <span className={`font-heading text-sm font-bold ${selStops.length > 0 ? 'text-white' : 'text-gray-600'}`}>
+                {selDateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </span>
+              {selectedDate === todayStr && (
+                <span className="text-xs bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded font-bold leading-none">Today</span>
               )}
             </div>
+            {selStops.length > 0 && (
+              <span className="text-xs text-white/70">{selStops.length} stop{selStops.length !== 1 ? 's' : ''}</span>
+            )}
           </div>
-        );
-      })}
+          <div className="p-3">
+            {selStops.length === 0 ? (
+              <p className="text-sm text-gray-400">No stops scheduled</p>
+            ) : (
+              <div className="space-y-2">
+                {selStops.map((stop) => (
+                  <div
+                    key={`${stop.customer.id}|${stop.originalDate}`}
+                    onClick={() => { if (!stop.isOnetime) handlePickStop(stop.customer.id, stop.originalDate, stop.customer.first_name + ' ' + stop.customer.last_name); }}
+                    className={`text-sm flex items-start gap-2 border-b border-gray-100 last:border-0 pb-2 last:pb-0 transition-colors ${
+                      movingStop && movingStop.customerId === String(stop.customer.id) && movingStop.originalDate === stop.originalDate
+                        ? 'bg-red-50 rounded-lg px-2 py-1'
+                        : !stop.isOnetime ? 'cursor-pointer hover:bg-gray-50 rounded-lg px-2 py-1' : ''
+                    } ${stop.isOverride && !(movingStop && movingStop.customerId === String(stop.customer.id)) ? 'bg-amber-50 rounded-lg px-2 py-1' : ''}`}
+                  >
+                    {!stop.isOnetime && (
+                      <span className={`select-none mt-0.5 text-sm leading-none ${
+                        movingStop && movingStop.customerId === String(stop.customer.id) && movingStop.originalDate === stop.originalDate
+                          ? 'text-brand-red' : 'text-gray-300'
+                      }`}>↕</span>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="font-semibold text-gray-900">{stop.customer.first_name} {stop.customer.last_name}</p>
+                        {stop.isOverride && <span className="text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-semibold">Rescheduled</span>}
+                        {stop.isOnetime && <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">One-time</span>}
+                      </div>
+                      <p className="text-xs text-gray-500 truncate">{stop.customer.address}</p>
+                      <p className="text-xs text-gray-400">
+                        {stop.customer.dogs || 1} dog{(stop.customer.dogs || 1) !== 1 ? 's' : ''} · {stop.customer.yard_size}
+                        {stop.customer.deodorizing && ' · +Deodorizing'}
+                      </p>
+                      {stop.customer.notes && <p className="text-xs text-amber-700 mt-0.5">Notes: {stop.customer.notes}</p>}
+                      {stop.isOverride && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Originally: {new Date(stop.originalDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </p>
+                      )}
+                    </div>
+                    {stop.isOverride && (
+                      <button
+                        onClick={() => resetOverride(stop.customer.id, stop.originalDate)}
+                        className="text-xs text-red-400 hover:text-red-600 shrink-0 mt-0.5 font-semibold"
+                      >
+                        ↩ Undo
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

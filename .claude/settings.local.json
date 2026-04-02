@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(git -C /Users/travisrodriguez/repos/RedTopScooters status)",
+      "Bash(node -e \"const fs=require\\('fs'\\); console.log\\(fs.readFileSync\\('/Users/travisrodriguez/repos/RedTopScooters/src/app/api/auth/login/route.js','utf8'\\)\\)\")"
     ]
   }
 }
