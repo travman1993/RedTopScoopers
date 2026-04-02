@@ -28,7 +28,7 @@ export default function AdminLogin() {
       if (data.success) {
         router.push('/admin');
       } else {
-        setError('Invalid credentials');
+        setError(data.error || 'Invalid credentials');
       }
     } catch {
       setError('Login failed. Please try again.');

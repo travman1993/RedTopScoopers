@@ -26,9 +26,11 @@ export default function QuoteForm() {
   const [quote, setQuote] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    if (formError) setFormError('');
     setForm((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
@@ -37,6 +39,15 @@ export default function QuoteForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError('');
+
+    // Client-side phone validation
+    const phoneDigits = form.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 7) {
+      setFormError('Please enter a valid phone number.');
+      return;
+    }
+
     setSubmitting(true);
 
     const result = calculateQuote({
@@ -44,6 +55,9 @@ export default function QuoteForm() {
       frequency: form.frequency,
       deodorizing: form.deodorizing,
     });
+
+    // Heavy cleanup: yard hasn't been cleaned in over a month
+    const isHeavyCleanup = form.lastCleaned === 'over_month';
 
     setQuote(result);
 
@@ -57,14 +71,19 @@ export default function QuoteForm() {
           dogs: parseInt(form.dogs, 10) || 1,
           quotedMonthly: result.monthlyTotal,
           quotedWeekly: result.weeklyPrice,
-          isHeavyCleanup: result.isHeavyCleanup,
+          isHeavyCleanup,
         }),
       });
+
       if (res.ok) {
         setSubmitted(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setFormError(data.error || 'Something went wrong. Please try again.');
+        setQuote(null);
       }
-    } catch (err) {
-      console.log('Lead submission pending — Supabase not configured yet');
+    } catch {
+      // Network error — still show quote, lead will be retried
       setSubmitted(true);
     }
 
@@ -215,6 +234,12 @@ export default function QuoteForm() {
               placeholder="Gate code, dog names, any dogs that are aggressive or need to be inside, special instructions..."
             />
           </div>
+
+          {formError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 font-medium">
+              {formError}
+            </div>
+          )}
 
           <button type="submit" disabled={submitting} className="btn-primary w-full text-center disabled:opacity-50 disabled:cursor-not-allowed">
             {submitting ? 'Calculating...' : 'Get Instant Quote'}

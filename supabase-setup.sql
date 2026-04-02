@@ -48,59 +48,51 @@ CREATE TABLE IF NOT EXISTS customers (
   route_order INTEGER,
   notes TEXT,
   is_active BOOLEAN DEFAULT TRUE,
+  -- Stripe integration
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
+  -- Service tracking
+  last_service_date DATE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add missing columns to existing tables (safe to run on existing DBs)
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS last_service_date DATE;
 
 -- Enable Row Level Security
 ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 
--- Allow anonymous inserts to leads (for the public quote form)
-CREATE POLICY "Allow public lead inserts"
+-- ─── LEADS POLICIES ──────────────────────────────────────────────────────────
+-- Public can submit the quote form
+CREATE POLICY IF NOT EXISTS "anon_insert_leads"
   ON leads FOR INSERT
   TO anon
   WITH CHECK (true);
 
--- Allow authenticated reads on all tables (for admin)
-CREATE POLICY "Allow authenticated read leads"
-  ON leads FOR SELECT
+-- Service role (used by API routes with supabaseAdmin) bypasses RLS automatically.
+-- Authenticated role policies are kept for future Supabase Auth integration.
+CREATE POLICY IF NOT EXISTS "authenticated_all_leads"
+  ON leads FOR ALL
   TO authenticated
-  USING (true);
+  USING (true)
+  WITH CHECK (true);
 
-CREATE POLICY "Allow authenticated update leads"
-  ON leads FOR UPDATE
-  TO authenticated
-  USING (true);
-
-CREATE POLICY "Allow authenticated all on customers"
+-- ─── CUSTOMERS POLICIES ───────────────────────────────────────────────────────
+-- Service role bypasses RLS automatically (no anon access needed for customers).
+CREATE POLICY IF NOT EXISTS "authenticated_all_customers"
   ON customers FOR ALL
   TO authenticated
-  USING (true);
+  USING (true)
+  WITH CHECK (true);
 
--- Also allow anon to read/write for now (simple auth)
-CREATE POLICY "Allow anon read leads"
-  ON leads FOR SELECT
-  TO anon
-  USING (true);
-
-CREATE POLICY "Allow anon update leads"
-  ON leads FOR UPDATE
-  TO anon
-  USING (true);
-
-CREATE POLICY "Allow anon delete leads"
-  ON leads FOR DELETE
-  TO anon
-  USING (true);
-
-CREATE POLICY "Allow anon all customers"
-  ON customers FOR ALL
-  TO anon
-  USING (true);
-
--- Index for common queries
-CREATE INDEX idx_leads_status ON leads(status);
-CREATE INDEX idx_leads_created ON leads(created_at DESC);
-CREATE INDEX idx_customers_schedule ON customers(schedule_day);
-CREATE INDEX idx_customers_active ON customers(is_active);
+-- ─── INDEXES ─────────────────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+CREATE INDEX IF NOT EXISTS idx_leads_created ON leads(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_customers_schedule ON customers(schedule_day);
+CREATE INDEX IF NOT EXISTS idx_customers_active ON customers(is_active);
+CREATE INDEX IF NOT EXISTS idx_customers_stripe ON customers(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_customers_sub ON customers(stripe_subscription_id);

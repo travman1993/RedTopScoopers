@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabaseAdmin as supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Resend } from 'resend';
 
-// Simple in-memory rate limiter: 5 submissions per 15 minutes per IP
+// Rate limit: 5 submissions per 15 minutes per IP
 const rateMap = new Map();
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 15 * 60 * 1000;
@@ -19,8 +19,11 @@ function checkRateLimit(ip) {
   return true;
 }
 
+// Strips non-digit characters and checks for 10–15 digits (handles US + international)
+const PHONE_RE = /^\+?[\d\s\-().]{7,}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function POST(request) {
-  // Rate limiting
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
   if (!checkRateLimit(ip)) {
     return NextResponse.json({ success: false, error: 'Too many requests. Please wait before submitting again.' }, { status: 429 });
@@ -29,10 +32,23 @@ export async function POST(request) {
   try {
     const body = await request.json();
 
-    // Basic validation
+    // Required field presence
     if (!body.firstName || !body.lastName || !body.phone || !body.address) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
+
+    // Phone format validation
+    if (!PHONE_RE.test(body.phone)) {
+      return NextResponse.json({ success: false, error: 'Please enter a valid phone number' }, { status: 400 });
+    }
+
+    // Email format validation (only if provided)
+    if (body.email && !EMAIL_RE.test(body.email)) {
+      return NextResponse.json({ success: false, error: 'Please enter a valid email address' }, { status: 400 });
+    }
+
+    // Sanitize — strip HTML from text fields
+    const clean = (v) => (typeof v === 'string' ? v.replace(/<[^>]*>/g, '').trim() : v);
 
     if (!isSupabaseConfigured()) {
       console.log('New lead (Supabase not configured):', body);
@@ -40,11 +56,11 @@ export async function POST(request) {
     }
 
     const { data, error } = await supabase.from('leads').insert([{
-      first_name: body.firstName,
-      last_name: body.lastName,
-      phone: body.phone,
-      email: body.email || null,
-      address: body.address,
+      first_name: clean(body.firstName),
+      last_name: clean(body.lastName),
+      phone: clean(body.phone),
+      email: body.email ? clean(body.email) : null,
+      address: clean(body.address),
       dogs: body.dogs,
       yard_size: body.yardSize,
       frequency: body.frequency,
@@ -52,7 +68,7 @@ export async function POST(request) {
       preferred_day: body.preferredDay || null,
       heard_about: body.heardAbout || null,
       last_cleaned: body.lastCleaned,
-      notes: body.notes || null,
+      notes: body.notes ? clean(body.notes) : null,
       quoted_monthly: body.quotedMonthly,
       quoted_weekly: body.quotedWeekly,
       is_heavy_cleanup: body.isHeavyCleanup,
@@ -61,29 +77,28 @@ export async function POST(request) {
     }]);
 
     if (error) {
-      console.error('Supabase error:', error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      console.error('Supabase insert error:', error);
+      return NextResponse.json({ success: false, error: 'Failed to save your request. Please try again.' }, { status: 500 });
     }
 
-    // Send emails via Resend (non-blocking — don't fail the response if email fails)
+    // Send emails via Resend (non-blocking)
     if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
       const resend = new Resend(process.env.RESEND_API_KEY);
       const isRecurring = body.frequency !== 'onetime' && body.frequency !== 'deodorizing_only';
       const priceDisplay = isRecurring
         ? `$${body.quotedMonthly}/month`
-        : `$${body.quotedWeekly} one-time`;
+        : `$${body.quotedMonthly} one-time`;
 
       const emails = [];
 
-      // Confirmation to customer (only if they provided email)
       if (body.email) {
         emails.push(resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL,
           to: body.email,
-          subject: "Your Red Top Scoopers quote is ready!",
+          subject: 'Your Red Top Scoopers quote is ready!',
           html: `
             <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
-              <h2 style="color:#1a1a1a">Hey ${body.firstName}, thanks for reaching out! 🐾</h2>
+              <h2 style="color:#1a1a1a">Hey ${clean(body.firstName)}, thanks for reaching out! 🐾</h2>
               <p style="color:#444">We received your request and here's your estimated quote:</p>
               <div style="background:#f8f8f8;border-radius:8px;padding:16px;margin:16px 0">
                 <p style="margin:0;font-size:24px;font-weight:bold;color:#2d6a2d">${priceDisplay}</p>
@@ -102,27 +117,26 @@ export async function POST(request) {
         }));
       }
 
-      // Notification to admin
       if (process.env.ADMIN_EMAIL) {
-        const sep = isRecurring ? `${body.quotedMonthly}/mo` : `${body.quotedWeekly} one-time`;
+        const sep = isRecurring ? `${body.quotedMonthly}/mo` : `${body.quotedMonthly} one-time`;
         emails.push(resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL,
           to: process.env.ADMIN_EMAIL,
-          subject: `New lead: ${body.firstName} ${body.lastName} — ${body.address}`,
+          subject: `New lead: ${clean(body.firstName)} ${clean(body.lastName)} — ${clean(body.address)}`,
           html: `
             <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
               <h2 style="color:#1a1a1a">New Lead 🐾</h2>
               <table style="width:100%;border-collapse:collapse;font-size:14px">
-                <tr><td style="padding:6px 0;color:#666;width:120px">Name</td><td style="padding:6px 0;font-weight:600">${body.firstName} ${body.lastName}</td></tr>
+                <tr><td style="padding:6px 0;color:#666;width:120px">Name</td><td style="padding:6px 0;font-weight:600">${clean(body.firstName)} ${clean(body.lastName)}</td></tr>
                 <tr><td style="padding:6px 0;color:#666">Phone</td><td style="padding:6px 0"><a href="tel:${body.phone}">${body.phone}</a></td></tr>
                 ${body.email ? `<tr><td style="padding:6px 0;color:#666">Email</td><td style="padding:6px 0">${body.email}</td></tr>` : ''}
-                <tr><td style="padding:6px 0;color:#666">Address</td><td style="padding:6px 0">${body.address}</td></tr>
+                <tr><td style="padding:6px 0;color:#666">Address</td><td style="padding:6px 0">${clean(body.address)}</td></tr>
                 <tr><td style="padding:6px 0;color:#666">Dogs</td><td style="padding:6px 0">${body.dogs} · ${body.yardSize} yard</td></tr>
                 <tr><td style="padding:6px 0;color:#666">Service</td><td style="padding:6px 0">${body.frequency}${body.deodorizing ? ' + deodorizing' : ''}</td></tr>
                 <tr><td style="padding:6px 0;color:#666">Quote</td><td style="padding:6px 0;font-weight:bold;color:#2d6a2d">$${sep}</td></tr>
                 ${body.preferredDay ? `<tr><td style="padding:6px 0;color:#666">Preferred Day</td><td style="padding:6px 0;text-transform:capitalize">${body.preferredDay}</td></tr>` : ''}
                 ${body.isHeavyCleanup ? `<tr><td style="padding:6px 0;color:#dc2626">⚠ Heavy Cleanup</td><td style="padding:6px 0;color:#dc2626">First visit may take longer</td></tr>` : ''}
-                ${body.notes ? `<tr><td style="padding:6px 0;color:#666">Notes</td><td style="padding:6px 0">${body.notes}</td></tr>` : ''}
+                ${body.notes ? `<tr><td style="padding:6px 0;color:#666">Notes</td><td style="padding:6px 0">${clean(body.notes)}</td></tr>` : ''}
                 <tr><td style="padding:6px 0;color:#666">Heard About</td><td style="padding:6px 0;text-transform:capitalize">${body.heardAbout || 'not specified'}</td></tr>
               </table>
               <p style="margin-top:20px">
@@ -132,13 +146,19 @@ export async function POST(request) {
         }));
       }
 
-      // Fire emails in parallel but don't await — never block the response
-      Promise.allSettled(emails).catch(() => {});
+      // Fire in parallel but don't block the response — log any failures
+      Promise.allSettled(emails).then((results) => {
+        results.forEach((result, i) => {
+          if (result.status === 'rejected') {
+            console.error(`Email send ${i} failed:`, result.reason);
+          }
+        });
+      });
     }
 
     return NextResponse.json({ success: true, data });
   } catch (err) {
-    console.error('API error:', err);
+    console.error('Leads API error:', err);
     return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });
   }
 }

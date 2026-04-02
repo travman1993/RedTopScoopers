@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase';
+import { validateAdminSession } from '@/lib/auth';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(request) {
+  if (!validateAdminSession(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { customerId } = await request.json();
 
-    // Fetch customer from Supabase
     const { data: customer, error } = await supabase
       .from('customers')
       .select('*')
@@ -19,13 +23,17 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    // Create Stripe customer
-    const stripeCustomer = await stripe.customers.create({
-      name: `${customer.first_name} ${customer.last_name}`,
-      email: customer.email || undefined,
-      phone: customer.phone || undefined,
-      metadata: { supabase_id: String(customerId) },
-    });
+    // Reuse existing Stripe customer if already created
+    let stripeCustomerId = customer.stripe_customer_id;
+    if (!stripeCustomerId) {
+      const stripeCustomer = await stripe.customers.create({
+        name: `${customer.first_name} ${customer.last_name}`,
+        email: customer.email || undefined,
+        phone: customer.phone || undefined,
+        metadata: { supabase_id: String(customerId) },
+      });
+      stripeCustomerId = stripeCustomer.id;
+    }
 
     const isOnetime = customer.frequency === 'onetime' || customer.frequency === 'deodorizing_only';
     const amount = (customer.monthly_rate || customer.quoted_monthly || 0) * 100; // cents
@@ -39,9 +47,8 @@ export async function POST(request) {
     let checkoutSession;
 
     if (isOnetime) {
-      // One-time payment checkout
       checkoutSession = await stripe.checkout.sessions.create({
-        customer: stripeCustomer.id,
+        customer: stripeCustomerId,
         mode: 'payment',
         payment_method_types: ['card'],
         line_items: [{
@@ -57,9 +64,8 @@ export async function POST(request) {
         metadata: { supabase_id: String(customerId), type: 'onetime' },
       });
     } else {
-      // Recurring subscription checkout
       checkoutSession = await stripe.checkout.sessions.create({
-        customer: stripeCustomer.id,
+        customer: stripeCustomerId,
         mode: 'subscription',
         payment_method_types: ['card'],
         line_items: [{
@@ -77,13 +83,13 @@ export async function POST(request) {
       });
     }
 
-    // Save Stripe customer ID to Supabase
+    // Save Stripe customer ID to Supabase (only updates if it changed)
     await supabase
       .from('customers')
-      .update({ stripe_customer_id: stripeCustomer.id, payment_status: 'pending' })
+      .update({ stripe_customer_id: stripeCustomerId, payment_status: 'pending' })
       .eq('id', customerId);
 
-    return NextResponse.json({ checkoutUrl: checkoutSession.url, stripeCustomerId: stripeCustomer.id });
+    return NextResponse.json({ checkoutUrl: checkoutSession.url, stripeCustomerId });
   } catch (err) {
     console.error('Stripe create-customer error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

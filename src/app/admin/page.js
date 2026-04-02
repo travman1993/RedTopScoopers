@@ -19,16 +19,32 @@ export default function AdminDashboard() {
   const [pendingApproval, setPendingApproval] = useState(null);
   const [todayOrder, setTodayOrder] = useState([]);
   const [declinedLeads, setDeclinedLeads] = useState([]);
+  const [archivedLeads, setArchivedLeads] = useState([]);
   const [allTimeLeadCount, setAllTimeLeadCount] = useState(0);
+  const [completedToday, setCompletedToday] = useState(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const key = `rts_completed_${new Date().toISOString().split('T')[0]}`;
+      return new Set(JSON.parse(localStorage.getItem(key) || '[]'));
+    } catch { return new Set(); }
+  });
+  const [toasts, setToasts] = useState([]);
   const router = useRouter();
+
+  const showToast = useCallback((message, type = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500);
+  }, []);
 
   const fetchData = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
     setLoading(true);
-    const [leadsRes, customersRes, countRes] = await Promise.all([
+    const [leadsRes, customersRes, countRes, archivedRes] = await Promise.all([
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
       supabase.from('customers').select('*').order('created_at', { ascending: false }),
       supabase.from('leads').select('id', { count: 'exact', head: true }).neq('status', 'deleted'),
+      supabase.from('leads').select('*').eq('status', 'deleted').order('updated_at', { ascending: false }),
     ]);
     if (leadsRes.data) {
       const active = leadsRes.data.filter((l) => l.status !== 'declined' && l.status !== 'approved' && l.status !== 'deleted');
@@ -36,14 +52,51 @@ export default function AdminDashboard() {
       setLeads(active);
       setDeclinedLeads(declined);
     }
+    if (archivedRes.data) setArchivedLeads(archivedRes.data);
     if (customersRes.data) setCustomers(customersRes.data);
     if (countRes.count != null) setAllTimeLeadCount(countRes.count);
     setLoading(false);
   }, []);
 
+  // Sync completedToday from Supabase (customers with last_service_date === today)
+  useEffect(() => {
+    if (!customers.length) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const doneFromDB = new Set(
+      customers.filter((c) => c.last_service_date === todayStr).map((c) => c.id)
+    );
+    if (doneFromDB.size > 0) {
+      setCompletedToday((prev) => new Set([...prev, ...doneFromDB]));
+    }
+  }, [customers]);
+
+  const handleMarkComplete = useCallback(async (stopId) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayKey = `rts_completed_${todayStr}`;
+    setCompletedToday((prev) => {
+      const next = new Set([...prev, stopId]);
+      try { localStorage.setItem(todayKey, JSON.stringify([...next])); } catch {}
+      return next;
+    });
+    if (isSupabaseConfigured()) {
+      await supabase.from('customers').update({ last_service_date: todayStr, updated_at: new Date().toISOString() }).eq('id', stopId);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    // Handle Stripe billing redirect feedback
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('billing') === 'success') {
+        showToast('Billing set up successfully!');
+        window.history.replaceState({}, '', '/admin');
+      } else if (params.get('billing') === 'cancelled') {
+        showToast('Billing setup was cancelled.', 'info');
+        window.history.replaceState({}, '', '/admin');
+      }
+    }
+  }, [fetchData, showToast]);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -60,9 +113,10 @@ export default function AdminDashboard() {
     if (isSupabaseConfigured()) {
       if (status === 'approved') {
         const isOnetime = lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only';
-        await Promise.all([
-          supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id),
-          supabase.from('customers').insert([{
+        const { data: existingCustomer } = await supabase.from('customers').select('id').eq('lead_id', id).maybeSingle();
+        await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+        if (!existingCustomer) {
+          await supabase.from('customers').insert([{
             lead_id: lead.id,
             first_name: lead.first_name,
             last_name: lead.last_name,
@@ -79,12 +133,14 @@ export default function AdminDashboard() {
             notes: lead.notes || null,
             start_date: appointmentDate || new Date().toISOString().split('T')[0],
             is_active: true,
-          }]),
-        ]);
+          }]);
+        }
         fetchData();
+        showToast(`${lead.first_name} ${lead.last_name} approved and added to customers.`);
       } else if (status === 'declined') {
         await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
         setDeclinedLeads((prev) => [{ ...lead, status: 'declined' }, ...prev]);
+        showToast(`${lead.first_name} ${lead.last_name} moved to Follow-Up.`, 'info');
       } else {
         await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
       }
@@ -220,6 +276,16 @@ export default function AdminDashboard() {
     }
   };
 
+  const restoreLead = async (id) => {
+    const lead = archivedLeads.find((l) => l.id === id);
+    if (!lead) return;
+    setArchivedLeads((prev) => prev.filter((l) => l.id !== id));
+    setLeads((prev) => [{ ...lead, status: 'new' }, ...prev]);
+    if (isSupabaseConfigured()) {
+      await supabase.from('leads').update({ status: 'new', updated_at: new Date().toISOString() }).eq('id', id);
+    }
+  };
+
   const baseTodayStops = useMemo(() => {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const todayName = dayNames[new Date().getDay()];
@@ -269,7 +335,7 @@ export default function AdminDashboard() {
   const newLeadCount = leads.filter((l) => l.status === 'new').length;
 
   const tabs = [
-    { id: 'today', label: 'Today', count: todayStops.length },
+    { id: 'today', label: 'Today', count: todayStops.filter((s) => !completedToday.has(s.id)).length },
     { id: 'leads', label: 'Leads', count: newLeadCount },
     { id: 'customers', label: 'Customers', count: customers.length },
     { id: 'schedule', label: 'Schedule' },
@@ -279,6 +345,20 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Toast notifications */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center pointer-events-none">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`px-4 py-2.5 rounded-xl shadow-lg text-sm font-semibold text-white pointer-events-auto transition-all ${
+              t.type === 'info' ? 'bg-blue-600' : t.type === 'error' ? 'bg-red-600' : 'bg-gray-900'
+            }`}
+          >
+            {t.message}
+          </div>
+        ))}
+      </div>
+
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <Image src="/logo.png" alt="RTS" width={40} height={40} className="w-10 h-10 rounded-full shadow-md" />
@@ -321,7 +401,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="p-4 max-w-6xl mx-auto">
-        {activeTab === 'today' && <TodayTab stops={todayStops} onReorder={(newOrder) => setTodayOrder(newOrder.map((s) => s.id))} />}
+        {activeTab === 'today' && <TodayTab stops={todayStops} onReorder={(newOrder) => setTodayOrder(newOrder.map((s) => s.id))} completedToday={completedToday} onMarkComplete={handleMarkComplete} />}
         {activeTab === 'leads' && (
           <LeadsTab
             leads={leads}
@@ -350,7 +430,7 @@ export default function AdminDashboard() {
           />
         )}
         {activeTab === 'schedule' && <ScheduleTab customers={customers} />}
-        {activeTab === 'followup' && <FollowUpTab leads={declinedLeads} onReopen={reopenLead} onDelete={deleteLead} />}
+        {activeTab === 'followup' && <FollowUpTab leads={declinedLeads} onReopen={reopenLead} onDelete={deleteLead} archivedLeads={archivedLeads} onRestore={restoreLead} />}
         {activeTab === 'analytics' && <AnalyticsTab analytics={analytics} customers={customers} />}
       </div>
     </div>
@@ -359,16 +439,10 @@ export default function AdminDashboard() {
 
 // ─── TODAY TAB (drag-to-reorder) ─────────────────────────────────────────────
 
-function TodayTab({ stops, onReorder }) {
+function TodayTab({ stops, onReorder, completedToday, onMarkComplete }) {
   const [dragIndex, setDragIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
-  const todayKey = `rts_completed_${new Date().toISOString().split('T')[0]}`;
-  const [completed, setCompleted] = useState(() => {
-    try {
-      const saved = localStorage.getItem(todayKey);
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch { return new Set(); }
-  });
+  const completed = completedToday;
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayLabel = dayNames[new Date().getDay()];
   const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -386,11 +460,7 @@ function TodayTab({ stops, onReorder }) {
     setDragOverIndex(null);
   };
   const handleDragEnd = () => { setDragIndex(null); setDragOverIndex(null); };
-  const markComplete = (id) => setCompleted((prev) => {
-    const next = new Set([...prev, id]);
-    try { localStorage.setItem(todayKey, JSON.stringify([...next])); } catch {}
-    return next;
-  });
+  const markComplete = (id) => onMarkComplete(id);
 
   const visible = stops.filter((s) => !completed.has(s.id));
   const doneCount = completed.size;
@@ -745,7 +815,7 @@ function LeadsTab({ leads, statusFilter, setStatusFilter, onUpdateStatus, editin
                       Decline
                     </button>
                   )}
-                  {(lead.status === 'approved' || lead.status === 'declined') && confirmDeleteId !== lead.id && (
+                  {confirmDeleteId !== lead.id && (
                     <button onClick={() => setConfirmDeleteId(lead.id)} className="text-xs font-bold uppercase bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-red-100 hover:text-red-600 transition-colors ml-auto">
                       Delete
                     </button>
@@ -781,6 +851,26 @@ const BLANK_CUSTOMER = {
   dogs: '1', yard_size: 'small', frequency: 'weekly', deodorizing: false,
   schedule_day: '', start_date: '', monthly_rate: '', notes: '',
 };
+
+function exportCustomersCSV(customers) {
+  const active = customers.filter((c) => c.is_active && c.payment_status !== 'removed');
+  const headers = ['First Name','Last Name','Phone','Email','Address','Dogs','Yard Size','Service','Schedule Day','Monthly Rate','Payment Status','Deodorizing','Notes','Start Date'];
+  const rows = active.map((c) => [
+    c.first_name, c.last_name, c.phone, c.email || '',
+    c.address, c.dogs || 1, c.yard_size, c.frequency,
+    c.schedule_day || '', `$${c.monthly_rate || 0}`,
+    c.payment_status || 'pending', c.deodorizing ? 'Yes' : 'No',
+    (c.notes || '').replace(/,/g, ';'), c.start_date || '',
+  ]);
+  const csv = [headers, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `rts-customers-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer, onAddCustomer, onPauseCustomer, onResumeCustomer, onUpdatePayment }) {
   const [search, setSearch] = useState('');
@@ -822,12 +912,20 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="font-heading text-xl font-bold text-gray-900">Customers</h2>
-        <button
-          onClick={() => setShowAdd((v) => !v)}
-          className="text-xs font-bold uppercase bg-brand-green text-white px-4 py-2 rounded-lg hover:bg-brand-green-light transition-colors"
-        >
-          {showAdd ? 'Cancel' : '+ Add Customer'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportCustomersCSV(customers)}
+            className="text-xs font-bold uppercase bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={() => setShowAdd((v) => !v)}
+            className="text-xs font-bold uppercase bg-brand-green text-white px-4 py-2 rounded-lg hover:bg-brand-green-light transition-colors"
+          >
+            {showAdd ? 'Cancel' : '+ Add Customer'}
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -890,11 +988,12 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
             </div>
             {isAddRecurring ? (
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Service Day</label>
-                <select value={addForm.schedule_day} onChange={setAdd('schedule_day')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
-                  <option value="">Unscheduled</option>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Service Day <span className="text-red-500">*</span></label>
+                <select value={addForm.schedule_day} onChange={setAdd('schedule_day')} className={`text-sm border rounded px-2 py-1.5 w-full bg-white ${!addForm.schedule_day ? 'border-amber-400' : 'border-gray-300'}`}>
+                  <option value="">— Select a day —</option>
                   {DAYS.map((d) => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
                 </select>
+                {!addForm.schedule_day && <p className="text-xs text-amber-600 mt-0.5">Required for recurring service</p>}
               </div>
             ) : (
               <EditField label="Appointment Date" value={addForm.start_date} onChange={setAdd('start_date')} type="date" />
@@ -1003,7 +1102,8 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
     notes: c.notes || '',
   });
 
-  const isRecurring = (ec?.frequency || c.frequency) !== 'onetime' && (ec?.frequency || c.frequency) !== 'deodorizing_only';
+  const cardIsRecurring = c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only';
+  const isRecurring = isEditing ? (ec.frequency !== 'onetime' && ec.frequency !== 'deodorizing_only') : cardIsRecurring;
 
   const setupBilling = async () => {
     setBillingLoading(true);
@@ -1044,10 +1144,10 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
                   const next = PAYMENT_CYCLE[(PAYMENT_CYCLE.indexOf(cur) + 1) % PAYMENT_CYCLE.length];
                   onUpdatePayment(c.id, next);
                 }}
-                className={`text-xs font-bold px-2 py-0.5 rounded-full uppercase cursor-pointer hover:opacity-80 transition-opacity ${(PAYMENT_STYLES[c.payment_status] || PAYMENT_STYLES.pending).cls}`}
-                title="Click to change payment status"
+                className={`text-xs font-bold px-2 py-0.5 rounded-full uppercase cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-gray-400 transition-all ${(PAYMENT_STYLES[c.payment_status] || PAYMENT_STYLES.pending).cls}`}
+                title="Tap to change payment status"
               >
-                {(PAYMENT_STYLES[c.payment_status] || PAYMENT_STYLES.pending).label}
+                {(PAYMENT_STYLES[c.payment_status] || PAYMENT_STYLES.pending).label} ↕
               </button>
             )}
           </div>
@@ -1122,11 +1222,12 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
             </div>
             {isRecurring ? (
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Service Day</label>
-                <select value={ec.schedule_day} onChange={set('schedule_day')} className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full bg-white">
-                  <option value="">Unscheduled</option>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Service Day <span className="text-red-500">*</span></label>
+                <select value={ec.schedule_day} onChange={set('schedule_day')} className={`text-sm border rounded px-2 py-1.5 w-full bg-white ${!ec.schedule_day ? 'border-amber-400' : 'border-gray-300'}`}>
+                  <option value="">— Select a day —</option>
                   {DAYS.map((d) => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
                 </select>
+                {!ec.schedule_day && <p className="text-xs text-amber-600 mt-0.5">Required for recurring service</p>}
               </div>
             ) : (
               <div>
@@ -1219,7 +1320,7 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
           </div>
 
           {/* Stripe billing row — recurring active customers only */}
-          {c.is_active && isRecurring && !past && (
+          {c.is_active && cardIsRecurring && !past && (
             <div className="mt-2">
               {billingLink ? (
                 <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
@@ -1282,6 +1383,10 @@ function ScheduleTab({ customers }) {
     return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
   });
   const [movingStop, setMovingStop] = useState(null); // { customerId, originalDate, customerName }
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
   // Load overrides from Supabase on mount, fall back to localStorage
   useEffect(() => {
@@ -1315,17 +1420,27 @@ function ScheduleTab({ customers }) {
   today.setHours(0, 0, 0, 0);
   const todayStr = toDateStr(today);
 
-  // Build Mon–Sat calendar grid (9 weeks)
-  const calendarStart = new Date(today);
-  const dow = calendarStart.getDay();
-  calendarStart.setDate(calendarStart.getDate() + (dow === 0 ? -6 : 1 - dow));
-  const weeks = Array.from({ length: 9 }, (_, wi) =>
-    Array.from({ length: 6 }, (_, di) => {
-      const d = new Date(calendarStart);
-      d.setDate(calendarStart.getDate() + wi * 7 + di);
-      return d;
-    })
-  );
+  // Build Mon–Sat calendar grid for the displayed month
+  const monthYear = calendarMonth.getFullYear();
+  const monthIdx = calendarMonth.getMonth();
+  const firstOfMonth = new Date(monthYear, monthIdx, 1);
+  const daysToMon = firstOfMonth.getDay() === 0 ? 6 : firstOfMonth.getDay() - 1;
+  const gridStart = new Date(monthYear, monthIdx, 1 - daysToMon);
+  const lastOfMonth = new Date(monthYear, monthIdx + 1, 0);
+  const lastDow = lastOfMonth.getDay();
+  const daysToSat = lastDow === 0 ? 6 : lastDow === 6 ? 0 : 6 - lastDow;
+  const gridEnd = new Date(monthYear, monthIdx + 1, daysToSat);
+  const weeks = [];
+  const cur = new Date(gridStart);
+  while (cur <= gridEnd) {
+    const week = [];
+    for (let di = 0; di < 6; di++) {
+      week.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    cur.setDate(cur.getDate() + 1); // skip Sunday
+    weeks.push(week);
+  }
 
   const isRecurringScheduledOn = (customer, date) => {
     if (!customer.is_active) return false;
@@ -1426,11 +1541,30 @@ function ScheduleTab({ customers }) {
   const selDateObj = selectedDate ? new Date(selectedDate + 'T12:00:00') : null;
   const selStops = selDateObj ? getStopsForDate(selDateObj) : [];
 
+  const monthLabel = calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="font-heading text-xl font-bold text-gray-900">Schedule</h2>
-        <span className="text-xs text-gray-400">Tap day · Drag to reschedule</span>
+        <span className="text-xs text-gray-400">Tap day · Tap stop to move</span>
+      </div>
+
+      {/* Month navigation */}
+      <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-3 py-2">
+        <button
+          onClick={() => setCalendarMonth(new Date(monthYear, monthIdx - 1, 1))}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors font-bold text-lg"
+        >
+          ‹
+        </button>
+        <span className="font-heading font-bold text-gray-900 text-sm uppercase tracking-wider">{monthLabel}</span>
+        <button
+          onClick={() => setCalendarMonth(new Date(monthYear, monthIdx + 1, 1))}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors font-bold text-lg"
+        >
+          ›
+        </button>
       </div>
 
       {/* Moving banner */}
@@ -1454,10 +1588,7 @@ function ScheduleTab({ customers }) {
         </div>
 
         {/* Weeks */}
-        {weeks.map((week, wi) => {
-          // Check if any day in this week has stops (for rendering optimization)
-          const monthStart = week.find((d) => d.getDate() === 1);
-          return (
+        {weeks.map((week, wi) => (
             <div key={wi} className="grid grid-cols-6 border-b border-gray-100 last:border-0">
               {week.map((date) => {
                 const dateStr = toDateStr(date);
@@ -1465,8 +1596,7 @@ function ScheduleTab({ customers }) {
                 const isToday = dateStr === todayStr;
                 const isPast = date < today;
                 const isSelected = dateStr === selectedDate;
-                const isDragTarget = dragOverDate === dateStr;
-                const showMonthLabel = date.getDate() === 1;
+                const isCurrentMonth = date.getMonth() === monthIdx;
 
                 return (
                   <div
@@ -1477,13 +1607,8 @@ function ScheduleTab({ customers }) {
                     } ${
                       isSelected && !movingStop ? 'bg-green-50' :
                       isPast ? 'bg-gray-50/60' : 'bg-white'
-                    }`}
+                    } ${!isCurrentMonth ? 'opacity-40' : ''}`}
                   >
-                    {showMonthLabel && (
-                      <div className="text-xs font-bold text-brand-green leading-none mb-0.5">
-                        {date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
-                      </div>
-                    )}
                     <div className={`text-xs font-bold mb-1 w-5 h-5 flex items-center justify-center rounded-full ${
                       isToday ? 'bg-brand-red text-white' : isPast ? 'text-gray-300' : 'text-gray-700'
                     }`}>
@@ -1513,8 +1638,8 @@ function ScheduleTab({ customers }) {
                 );
               })}
             </div>
-          );
-        })}
+          )
+        )}
       </div>
 
       {/* Legend */}
@@ -1768,7 +1893,9 @@ function FollowUpLeadCard({ lead, onReopen, onDelete }) {
   );
 }
 
-function FollowUpTab({ leads, onReopen, onDelete }) {
+function FollowUpTab({ leads, onReopen, onDelete, archivedLeads = [], onRestore }) {
+  const [showArchived, setShowArchived] = useState(false);
+
   return (
     <div className="space-y-4">
       <div>
@@ -1785,6 +1912,38 @@ function FollowUpTab({ leads, onReopen, onDelete }) {
           {leads.map((lead) => (
             <FollowUpLeadCard key={lead.id} lead={lead} onReopen={onReopen} onDelete={onDelete} />
           ))}
+        </div>
+      )}
+
+      {archivedLeads.length > 0 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <span className={`transition-transform ${showArchived ? 'rotate-90' : ''}`}>▶</span>
+            Archived ({archivedLeads.length})
+          </button>
+
+          {showArchived && (
+            <div className="mt-3 space-y-3">
+              {archivedLeads.map((lead) => (
+                <div key={lead.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-start justify-between gap-4 opacity-70">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-800 truncate">{lead.first_name} {lead.last_name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{lead.address}</p>
+                    {lead.phone && <p className="text-xs text-gray-400">{lead.phone}</p>}
+                  </div>
+                  <button
+                    onClick={() => onRestore(lead.id)}
+                    className="shrink-0 text-xs font-semibold text-brand-green border border-green-300 rounded-lg px-3 py-1.5 hover:bg-green-50 transition-colors"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

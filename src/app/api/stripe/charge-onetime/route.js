@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase';
+import { validateAdminSession } from '@/lib/auth';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(request) {
+  if (!validateAdminSession(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { customerId, amount, description } = await request.json();
 
@@ -20,7 +25,6 @@ export async function POST(request) {
 
     let stripeCustomerId = customer.stripe_customer_id;
 
-    // Create Stripe customer if they don't have one yet
     if (!stripeCustomerId) {
       const sc = await stripe.customers.create({
         name: `${customer.first_name} ${customer.last_name}`,
