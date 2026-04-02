@@ -89,6 +89,27 @@ CREATE POLICY IF NOT EXISTS "authenticated_all_customers"
   USING (true)
   WITH CHECK (true);
 
+-- Schedule overrides table (one-time reschedules for recurring stops)
+CREATE TABLE IF NOT EXISTS schedule_overrides (
+  id BIGSERIAL PRIMARY KEY,
+  customer_id TEXT NOT NULL,
+  original_date DATE NOT NULL,
+  new_date DATE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (customer_id, original_date)
+);
+
+ALTER TABLE schedule_overrides ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "authenticated_all_schedule_overrides"
+  ON schedule_overrides FOR ALL
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+CREATE INDEX IF NOT EXISTS idx_schedule_overrides_customer ON schedule_overrides(customer_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_overrides_new_date ON schedule_overrides(new_date);
+
 -- ─── INDEXES ─────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
 CREATE INDEX IF NOT EXISTS idx_leads_created ON leads(created_at DESC);

@@ -30,7 +30,9 @@ export async function POST(request) {
         const supabaseId = session.metadata?.supabase_id;
         if (!supabaseId) break;
 
-        const updates = { payment_status: 'pending' };
+        // For one-time payments, checkout completion = payment received → mark paid immediately
+        const isOnetimeSession = session.metadata?.type === 'onetime' || session.metadata?.type === 'onetime_charge';
+        const updates = { payment_status: isOnetimeSession ? 'paid' : 'pending' };
         if (session.subscription) updates.stripe_subscription_id = session.subscription;
 
         await supabase.from('customers').update(updates).eq('id', supabaseId);
@@ -94,6 +96,17 @@ export async function POST(request) {
           .from('customers')
           .update({ stripe_subscription_id: null, payment_status: 'removed' })
           .eq('stripe_subscription_id', sub.id);
+        break;
+      }
+
+      case 'charge.refunded': {
+        const charge = event.data.object;
+        if (charge.customer) {
+          await supabase
+            .from('customers')
+            .update({ payment_status: 'refunded' })
+            .eq('stripe_customer_id', charge.customer);
+        }
         break;
       }
 

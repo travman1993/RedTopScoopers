@@ -50,7 +50,7 @@ export async function POST(request) {
         },
         quantity: 1,
       }],
-      success_url: `${baseUrl}/admin?billing=success`,
+      success_url: `${baseUrl}/billing-success`,
       cancel_url: `${baseUrl}/admin?billing=cancelled`,
       metadata: { supabase_id: String(customerId), type: 'onetime_charge' },
     });

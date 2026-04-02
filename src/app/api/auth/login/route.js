@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createSessionToken } from '@/lib/auth';
 
-// Rate limit: 10 attempts per 15 minutes per IP
+// Rate limit: 5 attempts per 15 minutes per IP
 const loginAttempts = new Map();
-const MAX_ATTEMPTS = 10;
+const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
 
 function checkLoginRateLimit(ip) {
@@ -28,11 +28,12 @@ export async function POST(request) {
   try {
     const { email, password } = await request.json();
 
-    const adminEmail = process.env.ADMIN_EMAIL || 'redtopscoopers@gmail.com';
+    const adminEmail = process.env.ADMIN_EMAIL;
     const adminPassword = process.env.ADMIN_PASSWORD;
     const sessionSecret = process.env.SESSION_SECRET;
 
-    if (!adminPassword || !sessionSecret) {
+    if (!adminEmail || !adminPassword || !sessionSecret) {
+      console.error('[auth] Missing required env vars: ADMIN_EMAIL, ADMIN_PASSWORD, or SESSION_SECRET');
       return NextResponse.json({ success: false, error: 'Server misconfigured' }, { status: 500 });
     }
 
@@ -50,6 +51,8 @@ export async function POST(request) {
       return response;
     }
 
+    // Slow down brute force — artificial delay on failure
+    await new Promise((r) => setTimeout(r, 500));
     return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
   } catch {
     return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });

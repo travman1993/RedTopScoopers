@@ -44,6 +44,11 @@ export async function POST(request) {
       ? 'Weekly Service — Monthly Billing'
       : 'Bi-Weekly Service — Monthly Billing';
 
+    // Bill subscriptions on the 1st of next month
+    const now = new Date();
+    const nextFirst = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const billingAnchor = Math.floor(nextFirst.getTime() / 1000);
+
     let checkoutSession;
 
     if (isOnetime) {
@@ -59,7 +64,7 @@ export async function POST(request) {
           },
           quantity: 1,
         }],
-        success_url: `${baseUrl}/admin?billing=success`,
+        success_url: `${baseUrl}/billing-success`,
         cancel_url: `${baseUrl}/admin?billing=cancelled`,
         metadata: { supabase_id: String(customerId), type: 'onetime' },
       });
@@ -77,7 +82,8 @@ export async function POST(request) {
           },
           quantity: 1,
         }],
-        success_url: `${baseUrl}/admin?billing=success`,
+        subscription_data: { billing_cycle_anchor: billingAnchor },
+        success_url: `${baseUrl}/billing-success`,
         cancel_url: `${baseUrl}/admin?billing=cancelled`,
         metadata: { supabase_id: String(customerId), type: 'subscription' },
       });

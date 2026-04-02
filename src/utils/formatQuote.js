@@ -23,7 +23,7 @@ export function formatQuoteOnScreen(quote) {
   }
   return {
     primary: `$${quote.weeklyPrice}/week`,
-    secondary: `Billed monthly: $${quote.monthlyTotal}`,
+    secondary: `Billed monthly on the 1st: $${quote.monthlyTotal}`,
   };
 }
 
@@ -57,7 +57,7 @@ export function formatQuoteSMS(quote, customerName = '') {
       lines.push(`Deodorizing: +$${quote.deodorizingAddon}/mo`);
     }
   } else {
-    lines.push(`Weekly cleanup: $${quote.weeklyPrice}/week (billed monthly at $${quote.base})`);
+    lines.push(`Weekly cleanup: $${quote.weeklyPrice}/week (billed on the 1st at $${quote.base}/mo)`);
     if (quote.yardAddon > 0) {
       lines.push(`${formatYardLabel(quote.yardSize)} yard: +$${quote.yardAddon}/mo`);
     }

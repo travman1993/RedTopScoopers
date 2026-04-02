@@ -3,13 +3,13 @@ import './globals.css';
 export const metadata = {
   title: 'Pet Waste Removal Cartersville GA | Red Top Scoopers',
   description:
-    'Professional pet waste removal in Cartersville, Acworth, Rome, Calhoun & Bartow County. Weekly service starting at $90/month. We handle the dirty work.',
+    'Professional pet waste removal in Cartersville, Acworth, Rome, Calhoun & Bartow County. Weekly service starting at $20/week. We handle the dirty work.',
   keywords:
     'pet waste removal, dog poop cleanup, yard cleaning service, Cartersville GA, Bartow County, pooper scooper service',
   openGraph: {
     title: 'Red Top Scoopers — Pet Waste Removal',
     description:
-      'Pet waste removal in Cartersville, Acworth, Rome, Calhoun & Bartow County. Weekly service starting at $90/month.',
+      'Pet waste removal in Cartersville, Acworth, Rome, Calhoun & Bartow County. Weekly service starting at $20/week.',
     url: 'https://redtopscoopers.com',
     siteName: 'Red Top Scoopers',
     images: [

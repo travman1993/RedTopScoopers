@@ -11,7 +11,7 @@ export default function Pricing() {
           </h2>
           <p className="text-lg text-gray-600 max-w-xl mx-auto">
             One flat rate — no matter how many dogs you have.
-            Most homes pay <span className="text-brand-red font-bold">$24/week</span> or less.
+            Most homes pay <span className="text-brand-red font-bold">$20/week</span> or less.
           </p>
           <p className="text-sm text-gray-400 mt-2">Billed monthly for convenience. No contracts. Cancel anytime.</p>
         </div>
@@ -28,8 +28,8 @@ export default function Pricing() {
             <div className="p-6 text-center bg-white">
               <h3 className="font-heading text-xl font-bold text-gray-900 mb-1">Weekly Service</h3>
               <p className="text-sm text-gray-500 mb-4">Same day, every week</p>
-              <p className="font-heading text-5xl font-bold text-brand-red leading-none">$24</p>
-              <p className="text-gray-400 text-sm mt-1 mb-4">— billed as $95/mo</p>
+              <p className="font-heading text-5xl font-bold text-brand-red leading-none">$20</p>
+              <p className="text-gray-400 text-sm mt-1 mb-4">— billed as $80/mo on the 1st</p>
               <div className="border-t border-gray-100 pt-4 space-y-2.5 text-left">
                 <PricingCheck text="Any number of dogs" />
                 <PricingCheck text="Same day every week" />
@@ -46,8 +46,8 @@ export default function Pricing() {
             <div className="p-6 text-center">
               <h3 className="font-heading text-xl font-bold text-gray-900 mb-1">Bi-Weekly</h3>
               <p className="text-sm text-gray-500 mb-4">Every other week</p>
-              <p className="font-heading text-5xl font-bold text-brand-red leading-none">$35.50</p>
-              <p className="text-gray-400 text-sm mt-1 mb-4">— billed as $71/month</p>
+              <p className="font-heading text-5xl font-bold text-brand-red leading-none">$37.50</p>
+              <p className="text-gray-400 text-sm mt-1 mb-4">— billed as $75/month</p>
               <div className="border-t border-gray-100 pt-4 space-y-2.5 text-left">
                 <PricingCheck text="Any number of dogs" />
                 <PricingCheck text="Flexible scheduling" />
@@ -64,7 +64,7 @@ export default function Pricing() {
             <div className="p-6 text-center">
               <h3 className="font-heading text-xl font-bold text-gray-900 mb-1">Quick Clean</h3>
               <p className="text-sm text-gray-500 mb-4">Single visit, done right</p>
-              <p className="font-heading text-5xl font-bold text-brand-red leading-none">$52</p>
+              <p className="font-heading text-5xl font-bold text-brand-red leading-none">$40</p>
               <p className="text-gray-400 text-sm mt-1 mb-4">one-time fee</p>
               <div className="border-t border-gray-100 pt-4 space-y-2.5 text-left">
                 <PricingCheck text="Any number of dogs" />

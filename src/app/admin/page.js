@@ -107,45 +107,57 @@ export default function AdminDashboard() {
     const lead = leads.find((l) => l.id === id);
     if (!lead) return;
 
-    // Auto-remove lead from list on approve or decline — moves to customers / follow-up
-    setLeads((prev) => prev.filter((l) => l.id !== id));
-
     if (isSupabaseConfigured()) {
-      if (status === 'approved') {
-        const isOnetime = lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only';
-        const { data: existingCustomer } = await supabase.from('customers').select('id').eq('lead_id', id).maybeSingle();
-        await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
-        if (!existingCustomer) {
-          await supabase.from('customers').insert([{
-            lead_id: lead.id,
-            first_name: lead.first_name,
-            last_name: lead.last_name,
-            phone: lead.phone,
-            email: lead.email || null,
-            address: lead.address,
-            dogs: lead.dogs,
-            yard_size: lead.yard_size,
-            frequency: lead.frequency,
-            deodorizing: lead.deodorizing,
-            schedule_day: isOnetime ? null : (lead.preferred_day || null),
-            monthly_rate: lead.quoted_monthly,
-            weekly_rate: lead.quoted_weekly,
-            notes: lead.notes || null,
-            start_date: appointmentDate || new Date().toISOString().split('T')[0],
-            is_active: true,
-          }]);
+      try {
+        if (status === 'approved') {
+          const isOnetime = lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only';
+          const { data: existingCustomer } = await supabase.from('customers').select('id').eq('lead_id', id).maybeSingle();
+          await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+          if (!existingCustomer) {
+            await supabase.from('customers').insert([{
+              lead_id: lead.id,
+              first_name: lead.first_name,
+              last_name: lead.last_name,
+              phone: lead.phone,
+              email: lead.email || null,
+              address: lead.address,
+              dogs: lead.dogs,
+              yard_size: lead.yard_size,
+              frequency: lead.frequency,
+              deodorizing: lead.deodorizing,
+              schedule_day: isOnetime ? null : (lead.preferred_day || null),
+              monthly_rate: lead.quoted_monthly,
+              weekly_rate: lead.quoted_weekly,
+              notes: lead.notes || null,
+              start_date: appointmentDate || new Date().toISOString().split('T')[0],
+              is_active: true,
+            }]);
+          }
+          setLeads((prev) => prev.filter((l) => l.id !== id));
+          fetchData();
+          showToast(`${lead.first_name} ${lead.last_name} approved and added to customers.`);
+          // Non-blocking approval email
+          if (lead.email) {
+            fetch('/api/notify/approved', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ firstName: lead.first_name, email: lead.email, frequency: lead.frequency }),
+            }).catch(() => {});
+          }
+        } else if (status === 'declined') {
+          await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+          setLeads((prev) => prev.filter((l) => l.id !== id));
+          setDeclinedLeads((prev) => [{ ...lead, status: 'declined' }, ...prev]);
+          showToast(`${lead.first_name} ${lead.last_name} moved to Follow-Up.`, 'info');
+        } else {
+          await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
         }
-        fetchData();
-        showToast(`${lead.first_name} ${lead.last_name} approved and added to customers.`);
-      } else if (status === 'declined') {
-        await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
-        setDeclinedLeads((prev) => [{ ...lead, status: 'declined' }, ...prev]);
-        showToast(`${lead.first_name} ${lead.last_name} moved to Follow-Up.`, 'info');
-      } else {
-        await supabase.from('leads').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+      } catch {
+        showToast('Something went wrong. Please try again.', 'error');
       }
     } else {
       // Demo mode
+      setLeads((prev) => prev.filter((l) => l.id !== id));
       if (status === 'approved') {
         const isOnetime = lead.frequency === 'onetime' || lead.frequency === 'deodorizing_only';
         setCustomers((prev) => [
@@ -540,7 +552,9 @@ function TodayTab({ stops, onReorder, completedToday, onMarkComplete }) {
                     {(stop.frequency === 'onetime' || stop.frequency === 'deodorizing_only') && (
                       <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">One-Time</span>
                     )}
-                    <span className="text-xs font-bold text-brand-red font-heading">${stop.monthly_rate || stop.weekly_rate}/mo</span>
+                    <span className="text-xs font-bold text-brand-red font-heading">
+                      ${stop.monthly_rate || stop.weekly_rate}{(stop.frequency !== 'onetime' && stop.frequency !== 'deodorizing_only') ? '/mo' : ''}
+                    </span>
                   </div>
                 </div>
 
@@ -1069,10 +1083,11 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
 }
 
 const PAYMENT_STYLES = {
-  paid:    { label: 'Paid',    cls: 'bg-green-100 text-green-700' },
-  unpaid:  { label: 'Unpaid',  cls: 'bg-red-100 text-red-700' },
-  overdue: { label: 'Overdue', cls: 'bg-orange-100 text-orange-700' },
-  pending: { label: 'Pending', cls: 'bg-gray-100 text-gray-500' },
+  paid:     { label: 'Paid',     cls: 'bg-green-100 text-green-700' },
+  unpaid:   { label: 'Unpaid',   cls: 'bg-red-100 text-red-700' },
+  overdue:  { label: 'Overdue',  cls: 'bg-orange-100 text-orange-700' },
+  pending:  { label: 'Pending',  cls: 'bg-gray-100 text-gray-500' },
+  refunded: { label: 'Refunded', cls: 'bg-purple-100 text-purple-700' },
 };
 const PAYMENT_CYCLE = ['pending', 'paid', 'unpaid', 'overdue'];
 
@@ -1319,8 +1334,8 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
             }
           </div>
 
-          {/* Stripe billing row — recurring active customers only */}
-          {c.is_active && cardIsRecurring && !past && (
+          {/* Stripe billing row — all active customers */}
+          {c.is_active && !past && (
             <div className="mt-2">
               {billingLink ? (
                 <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">

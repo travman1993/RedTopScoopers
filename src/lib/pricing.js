@@ -1,17 +1,18 @@
 /**
  * Red Top Scoopers — Simplified Pricing Logic
- * 
- * Base: $95/month flat (weekly service)
- * Bi-weekly: $95 × 0.75 = $71/month
- * One-time: $95 × 0.55 = $52
- * 
+ *
+ * Base: $80/month flat (weekly service, billed on the 1st)
+ * Bi-weekly: $75/month
+ * One-time: $40 (50% of base monthly)
+ *
  * Yard add-ons: Small included, Medium +$5, Large +$10, XL +$15
- * 
+ *
  * Deodorizing monthly: Small +$5, Medium +$10, Large +$15, XL +$20
  * Deodorizing one-time: Small $25, Medium $30, Large $40, XL $50
  */
 
-const BASE_MONTHLY = 95;
+const BASE_MONTHLY = 80;
+const BASE_BIWEEKLY = 75;
 
 const YARD_ADDON = {
   small: 0,
@@ -66,10 +67,10 @@ export function calculateQuote({
   let frequencyLabel = 'Weekly';
 
   if (frequency === 'biweekly') {
-    base = Math.round(BASE_MONTHLY * 0.75);
+    base = BASE_BIWEEKLY;
     frequencyLabel = 'Bi-Weekly';
   } else if (isOnetime) {
-    base = Math.round(BASE_MONTHLY * 0.55);
+    base = Math.round(BASE_MONTHLY * 0.5);
     frequencyLabel = 'One-Time';
   } else {
     base = BASE_MONTHLY;

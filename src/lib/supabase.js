@@ -17,8 +17,12 @@ export function isSupabaseConfigured() {
 // NEVER import this in client components.
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+if (!supabaseServiceKey && typeof window === 'undefined') {
+  console.error('[supabase] SUPABASE_SERVICE_ROLE_KEY is not set — API routes will use the anon client and may fail due to RLS');
+}
+
 export const supabaseAdmin = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
-  : supabase; // fall back to anon client if service key not configured yet
+  : supabase;
