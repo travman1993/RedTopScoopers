@@ -42,17 +42,11 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (!localStorage.getItem('rts_admin')) {
-        router.push('/admin/login');
-        return;
-      }
-      fetchData();
-    }
-  }, [router, fetchData]);
+    fetchData();
+  }, [fetchData]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('rts_admin');
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/admin/login');
   };
 
@@ -986,6 +980,8 @@ const PAYMENT_CYCLE = ['pending', 'paid', 'unpaid', 'overdue'];
 function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, onDeleteCustomer, onPause, onResume, onUpdatePayment, showDate = false, past = false }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPause, setConfirmPause] = useState(false);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingLink, setBillingLink] = useState(null);
   const isEditing = editingCustomer?.id === c.id;
   const ec = editingCustomer;
   const set = (field) => (e) => setEditingCustomer((p) => ({ ...p, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
@@ -1008,6 +1004,23 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
   });
 
   const isRecurring = (ec?.frequency || c.frequency) !== 'onetime' && (ec?.frequency || c.frequency) !== 'deodorizing_only';
+
+  const setupBilling = async () => {
+    setBillingLoading(true);
+    try {
+      const res = await fetch('/api/stripe/create-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId: c.id }),
+      });
+      const data = await res.json();
+      if (data.checkoutUrl) setBillingLink(data.checkoutUrl);
+      else alert('Failed to create billing link. Check Stripe keys.');
+    } catch {
+      alert('Failed to create billing link.');
+    }
+    setBillingLoading(false);
+  };
 
   return (
     <div className={`bg-white rounded-xl border p-4 ${past ? 'border-gray-100 opacity-70' : 'border-gray-200'}`}>
@@ -1187,22 +1200,60 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
 
       {/* Action buttons */}
       {!isEditing && !confirmPause && (
-        <div className="flex flex-wrap gap-2 mt-3">
-          <a href={`tel:${c.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
-          <a href={`sms:${c.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
-          <a
-            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-bold uppercase bg-gray-700 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            Directions
-          </a>
-          {c.is_active
-            ? <button onClick={() => setConfirmPause(true)} className="text-xs font-bold uppercase bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg hover:bg-yellow-200 transition-colors ml-auto">Pause</button>
-            : <button onClick={() => onResume(c.id)} className="text-xs font-bold uppercase bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 transition-colors ml-auto">Resume</button>
-          }
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <a href={`tel:${c.phone}`} className="text-xs font-bold uppercase bg-brand-green text-white px-3 py-1.5 rounded-lg hover:bg-brand-green-light transition-colors">Call</a>
+            <a href={`sms:${c.phone}`} className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors">Text</a>
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-bold uppercase bg-gray-700 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Directions
+            </a>
+            {c.is_active
+              ? <button onClick={() => setConfirmPause(true)} className="text-xs font-bold uppercase bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg hover:bg-yellow-200 transition-colors ml-auto">Pause</button>
+              : <button onClick={() => onResume(c.id)} className="text-xs font-bold uppercase bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 transition-colors ml-auto">Resume</button>
+            }
+          </div>
+
+          {/* Stripe billing row — recurring active customers only */}
+          {c.is_active && isRecurring && !past && (
+            <div className="mt-2">
+              {billingLink ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                  <p className="text-xs text-green-800 font-semibold truncate">Billing link ready — send to {c.first_name}</p>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(billingLink); }}
+                      className="text-xs font-bold uppercase bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700"
+                    >
+                      Copy Link
+                    </button>
+                    <a
+                      href={`sms:${c.phone}${/iPhone|iPad|iPod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '') ? '&' : '?'}body=${encodeURIComponent(`Hi ${c.first_name}! To set up your monthly billing for Red Top Scoopers, click this link to enter your card securely: ${billingLink}`)}`}
+                      className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600"
+                    >
+                      SMS Link
+                    </a>
+                    <button onClick={() => setBillingLink(null)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+                  </div>
+                </div>
+              ) : !c.stripe_customer_id ? (
+                <button
+                  onClick={setupBilling}
+                  disabled={billingLoading}
+                  className="text-xs font-bold uppercase bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                >
+                  {billingLoading ? 'Setting up...' : '💳 Set Up Billing'}
+                </button>
+              ) : (
+                <span className="text-xs text-green-700 font-semibold">✓ Billing Active</span>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -1225,82 +1276,264 @@ function EditField({ label, value, onChange, type = 'text' }) {
 // ─── SCHEDULE TAB ─────────────────────────────────────────────────────────────
 
 function ScheduleTab({ customers }) {
-  const recurring = customers.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
-  const onetimes = customers.filter((c) => (c.frequency === 'onetime' || c.frequency === 'deodorizing_only') && c.start_date);
+  const [overrides, setOverrides] = useState({});
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dragOverDate, setDragOverDate] = useState(null);
 
-  const groupedOnetimes = onetimes.reduce((acc, c) => {
-    const date = c.start_date;
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(c);
-    return acc;
-  }, {});
+  // Load overrides from Supabase on mount, fall back to localStorage
+  useEffect(() => {
+    async function loadOverrides() {
+      if (isSupabaseConfigured()) {
+        const { data } = await supabase.from('schedule_overrides').select('*');
+        if (data) {
+          const obj = {};
+          data.forEach((r) => { obj[`${r.customer_id}|${r.original_date}`] = r.new_date; });
+          setOverrides(obj);
+          return;
+        }
+      }
+      // Fallback to localStorage
+      try { setOverrides(JSON.parse(localStorage.getItem('rts_schedule_overrides') || '{}')); }
+      catch { setOverrides({}); }
+    }
+    loadOverrides();
+  }, []);
+
+  const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+  const toDateStr = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = toDateStr(today);
+
+  // Generate 63 days (9 weeks) from today
+  const dates = Array.from({ length: 63 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  const isRecurringScheduledOn = (customer, date) => {
+    if (!customer.is_active) return false;
+    if (customer.frequency === 'onetime' || customer.frequency === 'deodorizing_only') return false;
+    const dayName = DAY_NAMES[date.getDay()];
+    if (customer.schedule_day !== dayName) return false;
+    if (customer.frequency === 'weekly') return true;
+    if (customer.frequency === 'biweekly') {
+      if (!customer.start_date) return true;
+      const start = new Date(customer.start_date + 'T00:00:00');
+      const dayDiff = Math.round((date - start) / (24 * 60 * 60 * 1000));
+      if (dayDiff < 0) return false;
+      return Math.floor(dayDiff / 7) % 2 === 0;
+    }
+    return false;
+  };
+
+  const getStopsForDate = (date) => {
+    const dateStr = toDateStr(date);
+    const stops = [];
+
+    for (const c of customers) {
+      const key = `${c.id}|${dateStr}`;
+      // If overridden away from this date, skip
+      if (overrides[key]) continue;
+      if (isRecurringScheduledOn(c, date)) {
+        stops.push({ customer: c, originalDate: dateStr, isOverride: false, isOnetime: false });
+      }
+    }
+
+    // One-time appointments on this date (show regardless of is_active/pause state)
+    for (const c of customers) {
+      if ((c.frequency === 'onetime' || c.frequency === 'deodorizing_only') && c.start_date === dateStr && c.payment_status !== 'removed') {
+        stops.push({ customer: c, originalDate: dateStr, isOverride: false, isOnetime: true });
+      }
+    }
+
+    // Overrides dropped onto this date
+    for (const [key, newDate] of Object.entries(overrides)) {
+      if (newDate === dateStr) {
+        const [customerId, originalDate] = key.split('|');
+        const customer = customers.find((c) => String(c.id) === customerId);
+        if (customer) {
+          stops.push({ customer, originalDate, isOverride: true, isOnetime: false });
+        }
+      }
+    }
+
+    return stops;
+  };
+
+  const saveOverrides = async (next, customerId, originalDate, newDate, isDelete = false) => {
+    setOverrides(next);
+    try { localStorage.setItem('rts_schedule_overrides', JSON.stringify(next)); } catch {}
+    if (isSupabaseConfigured()) {
+      if (isDelete) {
+        await supabase.from('schedule_overrides')
+          .delete()
+          .eq('customer_id', String(customerId))
+          .eq('original_date', originalDate);
+      } else {
+        await supabase.from('schedule_overrides')
+          .upsert({ customer_id: String(customerId), original_date: originalDate, new_date: newDate },
+            { onConflict: 'customer_id,original_date' });
+      }
+    }
+  };
+
+  const handleDragStart = (e, customerId, originalDate) => {
+    setDraggedItem({ customerId: String(customerId), originalDate });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, dateStr) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverDate(dateStr);
+  };
+
+  const handleDrop = (e, targetDateStr) => {
+    e.preventDefault();
+    if (!draggedItem) return;
+    if (draggedItem.originalDate === targetDateStr) { setDraggedItem(null); setDragOverDate(null); return; }
+    const key = `${draggedItem.customerId}|${draggedItem.originalDate}`;
+    saveOverrides({ ...overrides, [key]: targetDateStr }, draggedItem.customerId, draggedItem.originalDate, targetDateStr);
+    setDraggedItem(null);
+    setDragOverDate(null);
+  };
+
+  const resetOverride = (customerId, originalDate) => {
+    const key = `${customerId}|${originalDate}`;
+    const next = { ...overrides };
+    delete next[key];
+    saveOverrides(next, customerId, originalDate, null, true);
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="font-heading text-xl font-bold text-gray-900 mb-4">Weekly Schedule</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {DAYS.map((day) => {
-            const dayCustomers = recurring.filter((c) => c.schedule_day === day);
-            return (
-              <div key={day} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className={`px-4 py-2 flex items-center justify-between ${dayCustomers.length > 0 ? 'bg-brand-green' : 'bg-gray-100'}`}>
-                  <h3 className={`font-heading text-sm font-bold uppercase tracking-wider ${dayCustomers.length > 0 ? 'text-white' : 'text-gray-500'}`}>
-                    {day}
-                  </h3>
-                  {dayCustomers.length > 0 && (
-                    <span className="text-xs text-white/70">{dayCustomers.length} stop{dayCustomers.length !== 1 ? 's' : ''}</span>
-                  )}
-                </div>
-                <div className="p-3">
-                  {dayCustomers.length === 0 ? (
-                    <p className="text-sm text-gray-400 py-2">No customers scheduled</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {dayCustomers.map((c) => (
-                        <div key={c.id} className="text-sm border-b border-gray-100 last:border-0 pb-2 last:pb-0">
-                          <p className="font-semibold text-gray-900">{c.first_name} {c.last_name}</p>
-                          <p className="text-xs text-gray-500">{c.address}</p>
-                          <p className="text-xs text-gray-400">{c.dogs || 1} dog{(c.dogs || 1) !== 1 ? 's' : ''} · {c.yard_size}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-heading text-xl font-bold text-gray-900">Schedule</h2>
+        <span className="text-xs text-gray-400">Next 63 days</span>
       </div>
+      <p className="text-xs text-gray-500 mb-3">Drag any stop to a different day to reschedule that visit. The recurring schedule stays intact.</p>
 
-      {onetimes.length > 0 && (
-        <div>
-          <h2 className="font-heading text-xl font-bold text-gray-900 mb-4">One-Time Appointments</h2>
-          <div className="space-y-3">
-            {Object.entries(groupedOnetimes)
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([date, appts]) => (
-                <div key={date} className="bg-white rounded-xl border border-blue-200 overflow-hidden">
-                  <div className="bg-blue-50 px-4 py-2 flex items-center justify-between">
-                    <h3 className="font-heading text-sm font-bold text-blue-800">
-                      {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                    </h3>
-                    <span className="text-xs text-blue-500">{appts.length} appt{appts.length !== 1 ? 's' : ''}</span>
-                  </div>
-                  <div className="p-3 space-y-2">
-                    {appts.map((c) => (
-                      <div key={c.id} className="text-sm">
-                        <p className="font-semibold text-gray-900">{c.first_name} {c.last_name}</p>
-                        <p className="text-xs text-gray-500">{c.address} · {c.dogs || 1} dog{(c.dogs || 1) !== 1 ? 's' : ''}</p>
-                        {c.notes && <p className="text-xs text-amber-700 mt-0.5">Notes: {c.notes}</p>}
+      {dates.map((date) => {
+        const dateStr = toDateStr(date);
+        const stops = getStopsForDate(date);
+        const isToday = dateStr === todayStr;
+        const isDragTarget = dragOverDate === dateStr;
+        const hasStops = stops.length > 0;
+        const dayLabel = date.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+        const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        return (
+          <div
+            key={dateStr}
+            className={`rounded-xl border overflow-hidden transition-all ${
+              isDragTarget
+                ? 'border-brand-green ring-2 ring-brand-green ring-opacity-40'
+                : hasStops
+                ? 'border-gray-200'
+                : 'border-gray-100'
+            }`}
+            onDragOver={(e) => handleDragOver(e, dateStr)}
+            onDrop={(e) => handleDrop(e, dateStr)}
+            onDragLeave={() => setDragOverDate(null)}
+          >
+            <div className={`px-4 py-2 flex items-center justify-between ${
+              isDragTarget ? 'bg-green-100' : hasStops ? 'bg-brand-green' : 'bg-gray-100'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className={`font-heading text-sm font-bold uppercase tracking-wider ${
+                  isDragTarget ? 'text-brand-green' : hasStops ? 'text-white' : 'text-gray-500'
+                }`}>
+                  {dayLabel}
+                </span>
+                <span className={`text-xs ${
+                  isDragTarget ? 'text-brand-green' : hasStops ? 'text-white/70' : 'text-gray-400'
+                }`}>
+                  {dateLabel}
+                </span>
+                {isToday && (
+                  <span className="text-xs bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded font-bold leading-none">
+                    Today
+                  </span>
+                )}
+              </div>
+              {hasStops && !isDragTarget && (
+                <span className="text-xs text-white/70">{stops.length} stop{stops.length !== 1 ? 's' : ''}</span>
+              )}
+              {isDragTarget && (
+                <span className="text-xs text-brand-green font-semibold">Drop here</span>
+              )}
+            </div>
+
+            <div className={`p-3 ${isDragTarget ? 'bg-green-50' : hasStops ? 'bg-white' : 'bg-gray-50'}`}>
+              {hasStops ? (
+                <div className="space-y-2">
+                  {stops.map((stop) => (
+                    <div
+                      key={`${stop.customer.id}|${stop.originalDate}`}
+                      draggable={!stop.isOnetime}
+                      onDragStart={(e) => !stop.isOnetime && handleDragStart(e, stop.customer.id, stop.originalDate)}
+                      onDragEnd={() => { setDraggedItem(null); setDragOverDate(null); }}
+                      className={`text-sm flex items-start gap-2 border-b border-gray-100 last:border-0 pb-2 last:pb-0 ${
+                        !stop.isOnetime ? 'cursor-grab active:cursor-grabbing' : ''
+                      } ${stop.isOverride ? 'bg-amber-50 rounded-lg px-2 py-1' : ''}`}
+                    >
+                      {!stop.isOnetime && (
+                        <span className="text-gray-300 select-none mt-0.5 text-base leading-none">⠿</span>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-semibold text-gray-900">{stop.customer.first_name} {stop.customer.last_name}</p>
+                          {stop.isOverride && (
+                            <span className="text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-semibold">Rescheduled</span>
+                          )}
+                          {stop.isOnetime && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">One-time</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{stop.customer.address}</p>
+                        <p className="text-xs text-gray-400">
+                          {stop.customer.dogs || 1} dog{(stop.customer.dogs || 1) !== 1 ? 's' : ''} · {stop.customer.yard_size}
+                          {stop.customer.deodorizing && ' · +Deodorizing'}
+                        </p>
+                        {stop.customer.notes && (
+                          <p className="text-xs text-amber-700 mt-0.5">Notes: {stop.customer.notes}</p>
+                        )}
+                        {stop.isOverride && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            Originally: {new Date(stop.originalDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          </p>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                      {stop.isOverride && (
+                        <button
+                          onClick={() => resetOverride(stop.customer.id, stop.originalDate)}
+                          className="text-xs text-red-400 hover:text-red-600 shrink-0 mt-0.5 font-semibold"
+                          title="Undo reschedule"
+                        >
+                          ↩ Undo
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <p className="text-sm text-gray-400 py-1">
+                  {isDragTarget ? 'Release to reschedule here' : 'No stops scheduled'}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }

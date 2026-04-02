@@ -26,7 +26,6 @@ export default function AdminLogin() {
       const data = await res.json();
 
       if (data.success) {
-        localStorage.setItem('rts_admin', 'true');
         router.push('/admin');
       } else {
         setError('Invalid credentials');
@@ -61,7 +60,7 @@ export default function AdminLogin() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900
                          focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
             />
           </div>
@@ -73,7 +72,7 @@ export default function AdminLogin() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900 
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-900
                          focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
             />
           </div>
