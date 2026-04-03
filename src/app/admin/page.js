@@ -3,6 +3,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+
+// Returns today's date as YYYY-MM-DD in LOCAL time (not UTC).
+// Using toISOString() would return UTC and shift the date after 8pm Eastern.
+function localDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -24,7 +30,7 @@ export default function AdminDashboard() {
   const [completedToday, setCompletedToday] = useState(() => {
     if (typeof window === 'undefined') return new Set();
     try {
-      const key = `rts_completed_${new Date().toISOString().split('T')[0]}`;
+      const key = `rts_completed_${localDateStr()}`;
       return new Set(JSON.parse(localStorage.getItem(key) || '[]'));
     } catch { return new Set(); }
   });
@@ -61,7 +67,7 @@ export default function AdminDashboard() {
   // Sync completedToday from Supabase (customers with last_service_date === today)
   useEffect(() => {
     if (!customers.length) return;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = localDateStr();
     const doneFromDB = new Set(
       customers.filter((c) => c.last_service_date === todayStr).map((c) => c.id)
     );
@@ -71,7 +77,7 @@ export default function AdminDashboard() {
   }, [customers]);
 
   const handleMarkComplete = useCallback(async (stopId) => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = localDateStr();
     const todayKey = `rts_completed_${todayStr}`;
     setCompletedToday((prev) => {
       const next = new Set([...prev, stopId]);
@@ -129,7 +135,7 @@ export default function AdminDashboard() {
               monthly_rate: lead.quoted_monthly,
               weekly_rate: lead.quoted_weekly,
               notes: lead.notes || null,
-              start_date: appointmentDate || new Date().toISOString().split('T')[0],
+              start_date: appointmentDate || localDateStr(),
               is_active: true,
             }]);
           }
@@ -167,7 +173,7 @@ export default function AdminDashboard() {
             id: Date.now(),
             is_active: true,
             schedule_day: isOnetime ? null : lead.preferred_day,
-            start_date: appointmentDate || new Date().toISOString().split('T')[0],
+            start_date: appointmentDate || localDateStr(),
             monthly_rate: lead.quoted_monthly,
             weekly_rate: lead.quoted_weekly,
           },
@@ -301,7 +307,7 @@ export default function AdminDashboard() {
   const baseTodayStops = useMemo(() => {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const todayName = dayNames[new Date().getDay()];
-    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDate = localDateStr();
     const recurring = customers.filter((c) => c.is_active && c.schedule_day === todayName && c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
     const singleVisit = customers.filter((c) => c.is_active && (c.frequency === 'onetime' || c.frequency === 'deodorizing_only') && c.start_date === todayDate);
     return [...recurring, ...singleVisit];
@@ -441,7 +447,12 @@ export default function AdminDashboard() {
             onUpdatePayment={updatePaymentStatus}
           />
         )}
-        {activeTab === 'schedule' && <ScheduleTab customers={customers} />}
+        {activeTab === 'schedule' && <ScheduleTab customers={customers} onUpdateStartDate={async (id, date) => {
+          setCustomers((prev) => prev.map((c) => c.id === id ? { ...c, start_date: date } : c));
+          if (isSupabaseConfigured()) {
+            await supabase.from('customers').update({ start_date: date, updated_at: new Date().toISOString() }).eq('id', id);
+          }
+        }} />}
         {activeTab === 'followup' && <FollowUpTab leads={declinedLeads} onReopen={reopenLead} onDelete={deleteLead} archivedLeads={archivedLeads} onRestore={restoreLead} />}
         {activeTab === 'analytics' && <AnalyticsTab analytics={analytics} customers={customers} />}
       </div>
@@ -768,7 +779,7 @@ function LeadsTab({ leads, statusFilter, setStatusFilter, onUpdateStatus, editin
                         type="date"
                         value={pendingApproval.date}
                         onChange={(e) => setPendingApproval((p) => ({ ...p, date: e.target.value }))}
-                        min={new Date().toISOString().split('T')[0]}
+                        min={localDateStr()}
                         className="text-sm border border-gray-300 rounded px-2 py-1.5 flex-1"
                       />
                       <button
@@ -881,7 +892,7 @@ function exportCustomersCSV(customers) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `rts-customers-${new Date().toISOString().split('T')[0]}.csv`;
+  a.download = `rts-customers-${localDateStr()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -902,7 +913,7 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
       )
     : customers;
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = localDateStr();
   const activeFiltered = filtered.filter((c) => c.is_active);
   const recurring = activeFiltered.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
   const onetimes = activeFiltered.filter((c) => (c.frequency === 'onetime' || c.frequency === 'deodorizing_only') && (!c.start_date || c.start_date >= todayStr));
@@ -1027,7 +1038,7 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
               placeholder="Gate code, dog names, instructions..." />
           </div>
           <div className="flex gap-2 pt-1">
-            <button type="submit" disabled={addSaving || !addForm.first_name || !addForm.last_name || !addForm.phone || !addForm.address}
+            <button type="submit" disabled={addSaving || !addForm.first_name || !addForm.last_name || !addForm.phone || !addForm.address || (isAddRecurring && !addForm.schedule_day)}
               className="text-xs font-bold uppercase bg-brand-green text-white px-4 py-2 rounded-lg disabled:opacity-40">
               {addSaving ? 'Saving...' : 'Save Customer'}
             </button>
@@ -1096,6 +1107,7 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
   const [confirmPause, setConfirmPause] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingLink, setBillingLink] = useState(null);
+  const [chargeLink, setChargeLink] = useState(null);
   const isEditing = editingCustomer?.id === c.id;
   const ec = editingCustomer;
   const set = (field) => (e) => setEditingCustomer((p) => ({ ...p, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
@@ -1133,6 +1145,24 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
       else alert(`Billing error (${res.status}): ${data.error || 'Unknown error'}`);
     } catch (err) {
       alert(`Billing error: ${err.message}`);
+    }
+    setBillingLoading(false);
+  };
+
+  const chargeOnetime = async () => {
+    setBillingLoading(true);
+    try {
+      const amount = c.monthly_rate || c.quoted_monthly || 0;
+      const res = await fetch('/api/stripe/charge-onetime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId: c.id, amount, description: `Red Top Scoopers — ${c.frequency === 'deodorizing_only' ? 'Deodorizing Service' : 'One-Time Service'}` }),
+      });
+      const data = await res.json();
+      if (data.checkoutUrl) setChargeLink(data.checkoutUrl);
+      else alert(`Charge error (${res.status}): ${data.error || 'Unknown error'}`);
+    } catch (err) {
+      alert(`Charge error: ${err.message}`);
     }
     setBillingLoading(false);
   };
@@ -1177,7 +1207,11 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-          <p className="font-heading font-bold text-brand-red">${c.monthly_rate || c.quoted_monthly}/mo</p>
+          <p className="font-heading font-bold text-brand-red">
+            {(c.monthly_rate || c.quoted_monthly)
+              ? `$${c.monthly_rate || c.quoted_monthly}${cardIsRecurring ? '/mo' : ''}`
+              : '—'}
+          </p>
           <button
             onClick={() => isEditing ? setEditingCustomer(null) : openEdit()}
             className="text-gray-400 hover:text-gray-700 transition-colors p-1"
@@ -1337,35 +1371,68 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
           {/* Stripe billing row — all active customers */}
           {c.is_active && !past && (
             <div className="mt-2">
-              {billingLink ? (
-                <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
-                  <p className="text-xs text-green-800 font-semibold truncate">Billing link ready — send to {c.first_name}</p>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(billingLink); }}
-                      className="text-xs font-bold uppercase bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700"
-                    >
-                      Copy Link
-                    </button>
-                    <a
-                      href={`sms:${c.phone}${/iPhone|iPad|iPod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '') ? '&' : '?'}body=${encodeURIComponent(`Hi ${c.first_name}! To set up your monthly billing for Red Top Scoopers, click this link to enter your card securely: ${billingLink}`)}`}
-                      className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600"
-                    >
-                      SMS Link
-                    </a>
-                    <button onClick={() => setBillingLink(null)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+              {cardIsRecurring ? (
+                /* ── Recurring: set up subscription billing ── */
+                billingLink ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                    <p className="text-xs text-green-800 font-semibold truncate">Billing link ready — send to {c.first_name}</p>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(billingLink); }}
+                        className="text-xs font-bold uppercase bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700"
+                      >
+                        Copy Link
+                      </button>
+                      <a
+                        href={`sms:${c.phone}${/iPhone|iPad|iPod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '') ? '&' : '?'}body=${encodeURIComponent(`Hi ${c.first_name}! To set up your monthly billing for Red Top Scoopers, click this link to enter your card securely: ${billingLink}`)}`}
+                        className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600"
+                      >
+                        SMS Link
+                      </a>
+                      <button onClick={() => setBillingLink(null)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+                    </div>
                   </div>
-                </div>
-              ) : !c.stripe_customer_id ? (
-                <button
-                  onClick={setupBilling}
-                  disabled={billingLoading}
-                  className="text-xs font-bold uppercase bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-                >
-                  {billingLoading ? 'Setting up...' : '💳 Set Up Billing'}
-                </button>
+                ) : !c.stripe_customer_id ? (
+                  <button
+                    onClick={setupBilling}
+                    disabled={billingLoading}
+                    className="text-xs font-bold uppercase bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                  >
+                    {billingLoading ? 'Setting up...' : '💳 Set Up Billing'}
+                  </button>
+                ) : (
+                  <span className="text-xs text-green-700 font-semibold">✓ Billing Active</span>
+                )
               ) : (
-                <span className="text-xs text-green-700 font-semibold">✓ Billing Active</span>
+                /* ── One-time / deodorizing: charge for service ── */
+                chargeLink ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                    <p className="text-xs text-green-800 font-semibold truncate">Payment link ready — send to {c.first_name}</p>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(chargeLink); }}
+                        className="text-xs font-bold uppercase bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700"
+                      >
+                        Copy Link
+                      </button>
+                      <a
+                        href={`sms:${c.phone}${/iPhone|iPad|iPod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '') ? '&' : '?'}body=${encodeURIComponent(`Hi ${c.first_name}! Here's your payment link for your Red Top Scoopers service: ${chargeLink}`)}`}
+                        className="text-xs font-bold uppercase bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600"
+                      >
+                        SMS Link
+                      </a>
+                      <button onClick={() => setChargeLink(null)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={chargeOnetime}
+                    disabled={billingLoading}
+                    className="text-xs font-bold uppercase bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                  >
+                    {billingLoading ? 'Creating link...' : '💳 Charge Service'}
+                  </button>
+                )
               )}
             </div>
           )}
@@ -1391,7 +1458,7 @@ function EditField({ label, value, onChange, type = 'text' }) {
 
 // ─── SCHEDULE TAB ─────────────────────────────────────────────────────────────
 
-function ScheduleTab({ customers }) {
+function ScheduleTab({ customers, onUpdateStartDate }) {
   const [overrides, setOverrides] = useState({});
   const [selectedDate, setSelectedDate] = useState(() => {
     const t = new Date(); t.setHours(0,0,0,0);
@@ -1530,19 +1597,24 @@ function ScheduleTab({ customers }) {
     }
   };
 
-  const handlePickStop = (customerId, originalDate, customerName) => {
+  const handlePickStop = (customerId, originalDate, customerName, isOnetime = false) => {
     if (movingStop && movingStop.customerId === String(customerId) && movingStop.originalDate === originalDate) {
-      setMovingStop(null); // tap same stop again = cancel
+      setMovingStop(null);
     } else {
-      setMovingStop({ customerId: String(customerId), originalDate, customerName });
+      setMovingStop({ customerId: String(customerId), originalDate, customerName, isOnetime });
     }
   };
 
   const handleDropOnDate = (targetDateStr) => {
     if (!movingStop) return;
     if (movingStop.originalDate === targetDateStr) { setMovingStop(null); return; }
-    const key = `${movingStop.customerId}|${movingStop.originalDate}`;
-    saveOverrides({ ...overrides, [key]: targetDateStr }, movingStop.customerId, movingStop.originalDate, targetDateStr);
+    if (movingStop.isOnetime) {
+      // One-time: just update start_date directly
+      onUpdateStartDate(movingStop.customerId, targetDateStr);
+    } else {
+      const key = `${movingStop.customerId}|${movingStop.originalDate}`;
+      saveOverrides({ ...overrides, [key]: targetDateStr }, movingStop.customerId, movingStop.originalDate, targetDateStr);
+    }
     setMovingStop(null);
   };
 
@@ -1633,14 +1705,14 @@ function ScheduleTab({ customers }) {
                       {stops.slice(0, 2).map((stop, si) => (
                         <div
                           key={`${stop.customer.id}|${stop.originalDate}|${si}`}
-                          onClick={(e) => { e.stopPropagation(); if (!stop.isOnetime) handlePickStop(stop.customer.id, stop.originalDate, stop.customer.first_name + ' ' + stop.customer.last_name); }}
+                          onClick={(e) => { e.stopPropagation(); handlePickStop(stop.customer.id, stop.originalDate, stop.customer.first_name + ' ' + stop.customer.last_name, stop.isOnetime); }}
                           className={`text-xs px-1 py-0.5 rounded truncate leading-tight font-medium transition-all ${
                             movingStop && movingStop.customerId === String(stop.customer.id) && movingStop.originalDate === stop.originalDate
                               ? 'ring-2 ring-brand-red bg-red-100 text-red-800'
                               : stop.isOnetime ? 'bg-blue-100 text-blue-800' :
                                 stop.isOverride ? 'bg-amber-100 text-amber-800' :
                                 'bg-green-100 text-green-800'
-                          } ${!stop.isOnetime ? 'cursor-pointer active:scale-95' : ''}`}
+                          } cursor-pointer active:scale-95`}
                         >
                           {stop.customer.first_name} {stop.customer.last_name.charAt(0)}.
                         </div>
@@ -1688,19 +1760,17 @@ function ScheduleTab({ customers }) {
                 {selStops.map((stop) => (
                   <div
                     key={`${stop.customer.id}|${stop.originalDate}`}
-                    onClick={() => { if (!stop.isOnetime) handlePickStop(stop.customer.id, stop.originalDate, stop.customer.first_name + ' ' + stop.customer.last_name); }}
+                    onClick={() => { handlePickStop(stop.customer.id, stop.originalDate, stop.customer.first_name + ' ' + stop.customer.last_name, stop.isOnetime); }}
                     className={`text-sm flex items-start gap-2 border-b border-gray-100 last:border-0 pb-2 last:pb-0 transition-colors ${
                       movingStop && movingStop.customerId === String(stop.customer.id) && movingStop.originalDate === stop.originalDate
                         ? 'bg-red-50 rounded-lg px-2 py-1'
-                        : !stop.isOnetime ? 'cursor-pointer hover:bg-gray-50 rounded-lg px-2 py-1' : ''
+                        : 'cursor-pointer hover:bg-gray-50 rounded-lg px-2 py-1'
                     } ${stop.isOverride && !(movingStop && movingStop.customerId === String(stop.customer.id)) ? 'bg-amber-50 rounded-lg px-2 py-1' : ''}`}
                   >
-                    {!stop.isOnetime && (
-                      <span className={`select-none mt-0.5 text-sm leading-none ${
-                        movingStop && movingStop.customerId === String(stop.customer.id) && movingStop.originalDate === stop.originalDate
-                          ? 'text-brand-red' : 'text-gray-300'
-                      }`}>↕</span>
-                    )}
+                    <span className={`select-none mt-0.5 text-sm leading-none ${
+                      movingStop && movingStop.customerId === String(stop.customer.id) && movingStop.originalDate === stop.originalDate
+                        ? 'text-brand-red' : 'text-gray-300'
+                    }`}>↕</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="font-semibold text-gray-900">{stop.customer.first_name} {stop.customer.last_name}</p>
