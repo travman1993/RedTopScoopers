@@ -66,7 +66,7 @@ export async function POST(request) {
         }],
         success_url: `${baseUrl}/billing-success`,
         cancel_url: `${baseUrl}/admin?billing=cancelled`,
-        metadata: { supabase_id: String(customerId), type: 'onetime' },
+        metadata: { supabase_id: String(customerId), type: 'onetime', business: 'redtopscoopers' },
       });
     } else {
       checkoutSession = await stripe.checkout.sessions.create({
@@ -85,7 +85,7 @@ export async function POST(request) {
         subscription_data: { billing_cycle_anchor: billingAnchor },
         success_url: `${baseUrl}/billing-success`,
         cancel_url: `${baseUrl}/admin?billing=cancelled`,
-        metadata: { supabase_id: String(customerId), type: 'subscription' },
+        metadata: { supabase_id: String(customerId), type: 'subscription', business: 'redtopscoopers' },
       });
     }
 

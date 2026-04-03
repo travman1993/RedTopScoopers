@@ -52,7 +52,7 @@ export async function POST(request) {
       }],
       success_url: `${baseUrl}/billing-success`,
       cancel_url: `${baseUrl}/admin?billing=cancelled`,
-      metadata: { supabase_id: String(customerId), type: 'onetime_charge' },
+      metadata: { supabase_id: String(customerId), type: 'onetime_charge', business: 'redtopscoopers' },
     });
 
     return NextResponse.json({ checkoutUrl: checkoutSession.url });
