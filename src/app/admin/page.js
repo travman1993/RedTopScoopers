@@ -355,7 +355,7 @@ export default function AdminDashboard() {
   const tabs = [
     { id: 'today', label: 'Today', count: todayStops.filter((s) => !completedToday.has(s.id)).length },
     { id: 'leads', label: 'Leads', count: newLeadCount },
-    { id: 'customers', label: 'Customers', count: customers.length },
+    { id: 'customers', label: 'Customers', count: customers.filter((c) => c.is_active).length },
     { id: 'schedule', label: 'Schedule' },
     { id: 'followup', label: 'Follow-Up', count: declinedLeads.length },
     { id: 'analytics', label: 'Analytics' },
@@ -448,7 +448,7 @@ export default function AdminDashboard() {
           />
         )}
         {activeTab === 'schedule' && <ScheduleTab customers={customers} onUpdateStartDate={async (id, date) => {
-          setCustomers((prev) => prev.map((c) => c.id === id ? { ...c, start_date: date } : c));
+          setCustomers((prev) => prev.map((c) => String(c.id) === String(id) ? { ...c, start_date: date } : c));
           if (isSupabaseConfigured()) {
             await supabase.from('customers').update({ start_date: date, updated_at: new Date().toISOString() }).eq('id', id);
           }
@@ -914,7 +914,8 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
     : customers;
 
   const todayStr = localDateStr();
-  const activeFiltered = filtered.filter((c) => c.is_active);
+  const activeFiltered = filtered.filter((c) => c.is_active && c.payment_status !== 'removed');
+  const pausedFiltered = filtered.filter((c) => !c.is_active && c.payment_status !== 'removed');
   const recurring = activeFiltered.filter((c) => c.frequency !== 'onetime' && c.frequency !== 'deodorizing_only');
   const onetimes = activeFiltered.filter((c) => (c.frequency === 'onetime' || c.frequency === 'deodorizing_only') && (!c.start_date || c.start_date >= todayStr));
   const pastOnetimes = activeFiltered.filter((c) => (c.frequency === 'onetime' || c.frequency === 'deodorizing_only') && c.start_date && c.start_date < todayStr);
@@ -1078,15 +1079,12 @@ function CustomersTab({ customers, editingCustomer, setEditingCustomer, onSaveCu
               {pastOnetimes.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} onPause={onPauseCustomer} onResume={onResumeCustomer} onUpdatePayment={onUpdatePayment} showDate past />)}
             </div>
           )}
-          {(() => {
-            const paused = filtered.filter((c) => !c.is_active && c.payment_status !== 'removed');
-            return paused.length > 0 ? (
-              <div className="space-y-3">
-                <h3 className="font-heading text-sm uppercase tracking-widest text-gray-500">Paused ({paused.length})</h3>
-                {paused.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} onPause={onPauseCustomer} onResume={onResumeCustomer} onUpdatePayment={onUpdatePayment} />)}
-              </div>
-            ) : null;
-          })()}
+          {pausedFiltered.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="font-heading text-sm uppercase tracking-widest text-gray-500">Paused ({pausedFiltered.length})</h3>
+              {pausedFiltered.map((c) => <CustomerCard key={c.id} c={c} editingCustomer={editingCustomer} setEditingCustomer={setEditingCustomer} onSaveCustomer={onSaveCustomer} onDeleteCustomer={onDeleteCustomer} onPause={onPauseCustomer} onResume={onResumeCustomer} onUpdatePayment={onUpdatePayment} />)}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -1607,13 +1605,24 @@ function ScheduleTab({ customers, onUpdateStartDate }) {
 
   const handleDropOnDate = (targetDateStr) => {
     if (!movingStop) return;
-    if (movingStop.originalDate === targetDateStr) { setMovingStop(null); return; }
     if (movingStop.isOnetime) {
-      // One-time: just update start_date directly
+      // One-time: cancel if dropping on the same day, otherwise update start_date
+      if (movingStop.originalDate === targetDateStr) { setMovingStop(null); return; }
       onUpdateStartDate(movingStop.customerId, targetDateStr);
     } else {
       const key = `${movingStop.customerId}|${movingStop.originalDate}`;
-      saveOverrides({ ...overrides, [key]: targetDateStr }, movingStop.customerId, movingStop.originalDate, targetDateStr);
+      // Current displayed location: either the override target or the original recurring date
+      const currentLocation = overrides[key] || movingStop.originalDate;
+      // Cancel if dropping on where it already is
+      if (currentLocation === targetDateStr) { setMovingStop(null); return; }
+      if (targetDateStr === movingStop.originalDate) {
+        // Moving back to its original recurring slot — remove the override
+        const next = { ...overrides };
+        delete next[key];
+        saveOverrides(next, movingStop.customerId, movingStop.originalDate, null, true);
+      } else {
+        saveOverrides({ ...overrides, [key]: targetDateStr }, movingStop.customerId, movingStop.originalDate, targetDateStr);
+      }
     }
     setMovingStop(null);
   };
