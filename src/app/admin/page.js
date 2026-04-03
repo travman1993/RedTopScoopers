@@ -1130,9 +1130,9 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
       });
       const data = await res.json();
       if (data.checkoutUrl) setBillingLink(data.checkoutUrl);
-      else alert('Failed to create billing link. Check Stripe keys.');
-    } catch {
-      alert('Failed to create billing link.');
+      else alert(`Billing error (${res.status}): ${data.error || 'Unknown error'}`);
+    } catch (err) {
+      alert(`Billing error: ${err.message}`);
     }
     setBillingLoading(false);
   };
