@@ -54,8 +54,10 @@ export default function AdminLogin() {
           )}
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email</label>
+            <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-1.5">Email</label>
             <input
+              id="email"
+              name="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -67,8 +69,10 @@ export default function AdminLogin() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
+            <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
             <input
+              id="password"
+              name="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
