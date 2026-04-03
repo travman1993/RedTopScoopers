@@ -73,8 +73,16 @@ CREATE POLICY IF NOT EXISTS "anon_insert_leads"
   TO anon
   WITH CHECK (true);
 
+-- Admin dashboard reads leads using the anon client (anon key is already public
+-- in the JS bundle). Writes go through API routes using the service role key.
+-- NOTE: for stricter security, move all admin reads to server-side API routes
+-- and remove this policy.
+CREATE POLICY IF NOT EXISTS "anon_read_leads"
+  ON leads FOR SELECT
+  TO anon
+  USING (true);
+
 -- Service role (used by API routes with supabaseAdmin) bypasses RLS automatically.
--- Authenticated role policies are kept for future Supabase Auth integration.
 CREATE POLICY IF NOT EXISTS "authenticated_all_leads"
   ON leads FOR ALL
   TO authenticated
@@ -82,7 +90,14 @@ CREATE POLICY IF NOT EXISTS "authenticated_all_leads"
   WITH CHECK (true);
 
 -- ─── CUSTOMERS POLICIES ───────────────────────────────────────────────────────
--- Service role bypasses RLS automatically (no anon access needed for customers).
+-- Admin dashboard reads customers using the anon client.
+-- See note above about anon_read_leads.
+CREATE POLICY IF NOT EXISTS "anon_read_customers"
+  ON customers FOR SELECT
+  TO anon
+  USING (true);
+
+-- Service role bypasses RLS automatically.
 CREATE POLICY IF NOT EXISTS "authenticated_all_customers"
   ON customers FOR ALL
   TO authenticated
@@ -100,6 +115,11 @@ CREATE TABLE IF NOT EXISTS schedule_overrides (
 );
 
 ALTER TABLE schedule_overrides ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "anon_read_schedule_overrides"
+  ON schedule_overrides FOR SELECT
+  TO anon
+  USING (true);
 
 CREATE POLICY IF NOT EXISTS "authenticated_all_schedule_overrides"
   ON schedule_overrides FOR ALL
