@@ -1390,7 +1390,17 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
                       <button onClick={() => setBillingLink(null)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
                     </div>
                   </div>
-                ) : !c.stripe_customer_id ? (
+                ) : (c.stripe_subscription_id || c.payment_status === 'paid') ? (
+                  <span className="text-xs text-green-700 font-semibold">✓ Billing Active</span>
+                ) : c.stripe_customer_id ? (
+                  <button
+                    onClick={setupBilling}
+                    disabled={billingLoading}
+                    className="text-xs font-bold uppercase bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                  >
+                    {billingLoading ? 'Setting up...' : '🔁 Resend Billing Link'}
+                  </button>
+                ) : (
                   <button
                     onClick={setupBilling}
                     disabled={billingLoading}
@@ -1398,8 +1408,6 @@ function CustomerCard({ c, editingCustomer, setEditingCustomer, onSaveCustomer, 
                   >
                     {billingLoading ? 'Setting up...' : '💳 Set Up Billing'}
                   </button>
-                ) : (
-                  <span className="text-xs text-green-700 font-semibold">✓ Billing Active</span>
                 )
               ) : (
                 /* ── One-time / deodorizing: charge for service ── */
