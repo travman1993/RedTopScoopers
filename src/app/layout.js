@@ -35,6 +35,9 @@ export const metadata = {
     index: true,
     follow: true,
   },
+  other: {
+    'apple-domain-verification': 'D0N1gRpO0rlq4to8gDEqlUDXVj0ztJolbM_MghcdLp8',
+  },
 };
 
 export default function RootLayout({ children }) {
