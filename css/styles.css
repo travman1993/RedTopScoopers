@@ -451,6 +451,32 @@ a:hover { color: var(--red-dark); }
   color: var(--gray-500);
 }
 
+.social-links {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+.social-links a {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray-300);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.social-links a:hover {
+  background: var(--red);
+  color: #fff;
+}
+.social-links svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 /* ---------- Sticky mobile call/text bar ---------- */
 .sticky-cta {
   display: none;
