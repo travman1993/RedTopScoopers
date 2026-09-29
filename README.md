@@ -1,135 +1,85 @@
-# Red Top Scoopers — Web App
+# Red Top Scoopers LLC — Junk Removal Website
 
-Pet waste removal business website + admin CRM for Red Top Scoopers LLC.
+Plain static HTML/CSS/JS marketing site for Red Top Scoopers LLC, a junk removal
+company based in Cartersville, GA serving Northwest Georgia and Metro Atlanta.
+No backend, no database, no build step — every page is a self-contained `.html`
+file that can be opened directly in a browser or deployed to any static host.
 
 **Live site:** [redtopscoopers.com](https://redtopscoopers.com)
 
-## What This App Does
+## Pages
 
-1. **Public Landing Page** — Customers see pricing, trust points, service areas, and a quote form
-2. **Instant Quote Calculator** — Calculates exact price based on dogs, yard size, frequency, and add-ons
-3. **Admin Dashboard** (`/admin`) — Private CRM to manage leads, customers, schedule, and routes
-4. **Billing** — Stripe checkout for subscriptions (billed on the 1st) and one-time payments
+| File | Purpose |
+|---|---|
+| `index.html` | Home |
+| `services.html` | Services offered (quote-only, no listed prices) |
+| `service-locations.html` | Cities/counties served |
+| `about.html` | Company story & values |
+| `faq.html` | Common questions (includes `FAQPage` schema) |
+| `contact.html` | Call/text CTA + map (no contact form) |
 
-## Tech Stack
+Every page shares the same header/nav, footer, and mobile sticky
+call-or-text bar. There's no templating — header/footer markup is duplicated in
+each file on purpose, since there's no build step to assemble includes.
 
-- **Framework:** Next.js 14 (App Router)
-- **Styling:** Tailwind CSS
-- **Database:** Supabase (PostgreSQL + RLS)
-- **Payments:** Stripe (subscriptions + one-time checkout)
-- **Email:** Resend (transactional)
-- **Deployment:** Vercel
-
-## Quick Start
-
-```bash
-# 1. Install dependencies
-npm install
-
-# 2. Copy env file and add your keys
-cp .env.local.example .env.local
-
-# 3. Run dev server
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) — landing page  
-Open [http://localhost:3000/admin](http://localhost:3000/admin) — admin dashboard
-
-## Setup Steps
-
-### 1. Supabase
-1. Go to [supabase.com](https://supabase.com) and create a new project
-2. Run the SQL from `supabase-setup.sql` in the SQL Editor
-3. Copy your project URL, anon key, and service role key into `.env.local`
-
-### 2. Stripe
-1. Go to [dashboard.stripe.com](https://dashboard.stripe.com)
-2. Copy your secret key into `STRIPE_SECRET_KEY`
-3. Add a webhook endpoint pointing to `https://yourdomain.com/api/stripe/webhook`
-4. Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET`
-
-### 3. Resend
-1. Go to [resend.com](https://resend.com) and create an account
-2. Add and verify your sending domain
-3. Copy your API key into `RESEND_API_KEY`
-4. Set `RESEND_FROM_EMAIL` to your verified sending address
-
-### 4. Vercel
-1. Push this repo to GitHub
-2. Go to [vercel.com](https://vercel.com) and import the repo
-3. Add all `.env.local` variables in Vercel project settings
-4. Deploy
-
-### 5. Domain
-1. In Vercel, go to Settings → Domains
-2. Add `redtopscoopers.com`
-3. Update DNS to point to Vercel
-
-## Required Environment Variables
+## Structure
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-ADMIN_EMAIL=
-ADMIN_PASSWORD=
-SESSION_SECRET=
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-RESEND_API_KEY=
-RESEND_FROM_EMAIL=
-NEXT_PUBLIC_BASE_URL=https://redtopscoopers.com
+index.html, about.html, services.html, service-locations.html, faq.html, contact.html
+css/styles.css      All styling — CSS variables at the top control the brand colors
+js/main.js          Mobile nav toggle + auto-updating footer year
+images/             Logo, icons, hero/social images — see IMAGE_PROMPTS.md
+robots.txt
+sitemap.xml
+site.webmanifest
+IMAGE_PROMPTS.md    ChatGPT prompts for every image the site references
 ```
 
-## Admin Login
+## Previewing locally
 
-Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in your environment variables. There is no default fallback — both must be set.
+No install needed. Either:
+- Open `index.html` directly in a browser, or
+- Run a local static server from the repo root, e.g. `python3 -m http.server 8000`
+  and visit `http://localhost:8000`
 
-## Pricing
+## Adding the real images
 
-- **Weekly:** $20/week, billed as $80/month on the 1st
-- **Bi-Weekly:** $75/month
-- **One-Time:** $40 base
-- Yard size and deodorizing add-ons apply to all plans
+The HTML already references every image by its final filename (e.g.
+`images/logo.png`, `images/hero-home.jpg`, `images/icon-furniture.png`). Generate
+each one using the prompts in [`IMAGE_PROMPTS.md`](./IMAGE_PROMPTS.md), then save
+it into `images/` with that exact filename — no HTML/CSS changes required.
 
-## Project Structure
+## Deploying
 
-```
-src/
-├── app/
-│   ├── page.js                    # Public landing page
-│   ├── layout.js                  # Root layout + SEO
-│   ├── sitemap.js                 # Auto-generated sitemap
-│   ├── billing-success/page.js    # Post-checkout customer landing page
-│   ├── admin/
-│   │   ├── page.js                # Admin dashboard (leads, customers, schedule)
-│   │   └── login/page.js          # Admin login
-│   └── api/
-│       ├── leads/route.js         # Lead submission
-│       ├── auth/login/route.js    # Admin auth
-│       ├── notify/approved/route.js # Approval email to customer
-│       └── stripe/
-│           ├── create-customer/   # Stripe checkout session (subscriptions + one-time)
-│           ├── charge-onetime/    # Manual one-time charge
-│           ├── cancel-subscription/
-│           └── webhook/           # Stripe event handler
-├── components/                    # UI components
-├── lib/
-│   ├── supabase.js                # Supabase clients (anon + service role)
-│   ├── pricing.js                 # Quote calculation
-│   └── auth.js                    # Session token (HMAC-SHA256)
-└── utils/
-    └── formatQuote.js             # SMS/email quote formatting
-```
+Any static host works (Vercel, Netlify, GitHub Pages, S3 + CloudFront, etc.).
+On Vercel: import the repo, set the framework preset to "Other," and leave the
+build command empty — it will serve the files as-is.
+
+## SEO
+
+- Unique `<title>`/meta description/canonical URL per page
+- Open Graph + Twitter Card tags on every page (`images/og-image.png`)
+- `HomeAndConstructionBusiness` JSON-LD (name, phone, service area, hours) on
+  every page, plus `FAQPage` JSON-LD on `faq.html`
+- `sitemap.xml` + `robots.txt` at the repo root
+
+## Analytics
+
+Google Analytics (GA4) is wired up via the same measurement ID as before
+(`G-WDX10BYQMS`), loaded via `gtag.js` in the `<head>` of every page — no changes
+needed to keep existing tracking history intact.
 
 ## Brand
 
-- **Colors:** Red `#c41e2a`, Green `#1b5e20`
+- **Business:** Red Top Scoopers LLC — Junk Removal
+- **Colors:** Red `#c41e2a`, Charcoal `#1a1a1a`, Safety Yellow `#ffc107`
 - **Fonts:** Oswald (headings), Source Sans Pro (body)
-- **Phone:** 404-649-4654
+- **Phone (call or text):** 404-649-4654
 - **Email:** redtopscoopers@gmail.com
+- **Hours:** 7 days a week, 7am–7pm
+- **Service area:** Cartersville (HQ), Rome, Acworth, Kennesaw, Woodstock,
+  Marietta, Dallas, Rockmart, plus Northwest Georgia & Metro Atlanta
 
 ---
 
-Red Top Scoopers LLC — *We Handle the Dirty Work*
+Red Top Scoopers LLC — *We Haul the Heavy Stuff*
