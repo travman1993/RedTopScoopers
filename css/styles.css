@@ -251,14 +251,6 @@ a:hover { color: var(--red-dark); }
   overflow: hidden;
 }
 
-.hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(45deg, rgba(255,193,7,0.04) 0 12px, transparent 12px 24px);
-  pointer-events: none;
-}
-
 .hero__inner {
   position: relative;
   z-index: 1;
