@@ -49,7 +49,7 @@ just the truck/junk silhouette on a solid charcoal circle").
 
 ## 3. Social Share Image
 
-**`images/og-image.png`** — 1200×630px
+**`images/og-image.jpg`** — 1200×630px
 
 > Wide social-share banner for "Red Top Scoopers LLC — Junk Removal." Charcoal
 > black (#1a1a1a) background with a bold red (#c41e2a) diagonal stripe, a

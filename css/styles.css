@@ -413,6 +413,111 @@ a:hover { color: var(--red-dark); }
 }
 .faq-item p { color: var(--gray-700); margin-bottom: 0; }
 
+/* ---------- Long-form pages ---------- */
+.hero--sub {
+  padding: 3rem 0 2.5rem;
+  background-size: cover;
+  background-position: center;
+}
+
+.breadcrumb ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0;
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--gray-300);
+}
+.breadcrumb li + li::before { content: "›"; margin-right: 0.35rem; color: var(--gray-500); }
+.breadcrumb a { color: var(--gray-300); }
+.breadcrumb a:hover { color: var(--yellow); }
+
+.prose {
+  max-width: 760px;
+  margin: 0 auto;
+  font-size: 1.075rem;
+}
+.prose h2 { font-size: 1.6rem; margin-top: 2.25rem; }
+.prose h2:first-child { margin-top: 0; }
+.prose h3 { font-size: 1.2rem; margin-top: 1.75rem; }
+.prose ul, .prose ol { padding-left: 1.25rem; margin: 0 0 1.25em; }
+.prose li { margin-bottom: 0.4em; }
+.prose a { text-decoration: underline; text-underline-offset: 2px; }
+.prose .callout {
+  background: #fff;
+  border-left: 4px solid var(--red);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+}
+.prose .callout p { margin: 0; }
+.prose .faq-item h3 { margin-top: 0; }
+
+.section-alt { background: #ebe8e2; }
+
+.card--link { display: block; color: inherit; }
+.card--link:hover { color: inherit; }
+.card-more,
+.card-link {
+  display: inline-block;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.85rem;
+  color: var(--red);
+}
+.card-link { margin-top: 0.25rem; }
+.section-dark .card-link,
+.location-card .card-link { color: var(--yellow); }
+.location-card h3 a { color: #fff; }
+.location-card h3 a:hover { color: var(--yellow); }
+
+.town-pill-list a { color: var(--charcoal); }
+.town-pill-list a:hover { color: var(--red); }
+
+.faq-item .card-link { margin-top: 0.6rem; }
+
+/* ---------- Recent jobs ---------- */
+.job-card { padding: 0; overflow: hidden; }
+.job-card__photos {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  background: var(--gray-300);
+}
+.job-card__photos figure { margin: 0; position: relative; }
+.job-card__photos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.job-card__label {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  background: var(--charcoal);
+  color: var(--yellow);
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.35rem;
+}
+.job-card__body { padding: 1.25rem 1.5rem 1.5rem; }
+.job-card__meta {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--gray-500);
+  margin-bottom: 0.4rem;
+}
+.job-card__meta a { color: var(--gray-500); }
+.job-card__meta a:hover { color: var(--red); }
+
 /* ---------- Footer ---------- */
 .site-footer {
   background: var(--charcoal);
@@ -429,10 +534,12 @@ a:hover { color: var(--red-dark); }
 .site-footer a:hover { color: var(--yellow); }
 .footer-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1.3fr 1fr 1fr 1fr;
   gap: 2rem;
   margin-bottom: 2rem;
 }
+.footer-links { list-style: none; padding: 0; margin: 0; font-size: 0.9rem; }
+.footer-links li { margin-bottom: 0.45rem; }
 .footer-contact-line {
   display: flex;
   align-items: center;
@@ -499,7 +606,7 @@ a:hover { color: var(--red-dark); }
 @media (max-width: 860px) {
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
   .grid-3 { grid-template-columns: repeat(2, 1fr); }
-  .footer-grid { grid-template-columns: 1fr; gap: 1.5rem; }
+  .footer-grid { grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
 }
 
 @media (max-width: 720px) {
@@ -535,6 +642,7 @@ a:hover { color: var(--red-dark); }
 }
 
 @media (max-width: 600px) {
+  .footer-grid { grid-template-columns: 1fr; }
   .hero { padding: 3rem 0 2.5rem; }
   .section { padding: 2.75rem 0; }
 }
