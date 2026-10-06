@@ -72,6 +72,27 @@ room → 4-stage Cleanup Challenge that awards a 5/10/15/20% code.
 - To remove it: delete the `restricted-tag` button and `egg-loader.js` script
   from `footer()` in `tools/build_pages.py`, rebuild, and delete the files above.
 
+## Cheat Code Terminal
+
+A second hidden Easter egg, separate from the landfill game. Tap the footer logo
+five times quickly (or open a URL ending in `#terminal`) to open a terminal that
+accepts six codes: #1 and #2 unlock 5% and 10% rewards, #3 to #5 are clues, and
+#6 is spelled by the first letters of #1 to #5.
+
+- `js/cheat.js` + `css/cheat.css`: the whole terminal. The six codes, reward
+  percentages, terms and the three Impossible Run placeholders are in the CONFIG
+  block at the top of `cheat.js`.
+- The tap hook that loads it is the last block in `js/main.js`.
+- Codes #1 to #3 are hidden on the site as `data-rts-secret="N"` buttons, which
+  pull the code text from `cheat.js` when found: #1 is the "Load Ticket" tag on
+  the home page, #2 is the word "junk" in the Our Story paragraph on
+  `about.html`, #3 is the screw on the home page's yellow strip (three taps).
+  #4 and #5 aren't placed yet.
+- localStorage key `rts-cheat-terminal-v1`: remembers authenticated codes and reward IDs.
+- The codes are readable in `cheat.js` and reward IDs can't be checked by
+  `tools/verify_code.py`. It's for fun, not security.
+- To remove it: delete that block from `js/main.js` and the two files above.
+
 ## Previewing locally
 
 No install needed. Either:

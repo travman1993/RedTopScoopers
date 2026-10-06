@@ -677,3 +677,80 @@ a:hover { color: var(--red-dark); }
 }
 @keyframes restricted-blink { 0%, 88%, 100% { opacity: 0.35; } 92%, 96% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .restricted-tag__led { animation: none; opacity: 0.8; } }
+
+/* ---------- Hiding spots for the Cheat Code Terminal codes (js/main.js, js/cheat.js) ---------- */
+.load-ticket-row { margin: 2rem 0 0; text-align: center; }
+.load-ticket {
+  min-height: 44px;
+  padding: 0.3rem 0.8rem;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--gray-700);
+  font-family: var(--font-heading);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.load-ticket:hover,
+.load-ticket:focus-visible { color: var(--gray-300); border-color: var(--gray-500); outline: none; }
+.load-ticket.is-revealed { color: var(--yellow); border-color: var(--yellow); }
+.load-ticket.is-revealed .load-ticket__label,
+.secret-word.is-revealed .secret-word__label { display: none; }
+.load-ticket__out,
+.secret-word__out,
+.strip-plate { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: 0.06em; text-transform: none; }
+.load-ticket__out { font-size: 1rem; }
+
+.secret-word {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dotted rgba(26, 26, 26, 0.3);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: text;
+}
+.secret-word:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.secret-word.is-revealed { border-bottom-color: var(--red); color: var(--red); font-weight: 700; }
+
+.trust-strip { position: relative; }
+.strip-screw {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: 44px;
+  height: 44px;
+  padding: 0 6px 5px 0;
+  border: 0;
+  background: none;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.strip-screw svg { transform: rotate(calc(var(--turns, 0) * 120deg)); transition: transform 0.3s ease; }
+.strip-screw circle { fill: var(--yellow-dark); stroke: rgba(26, 26, 26, 0.28); stroke-width: 1; }
+.strip-screw path { stroke: rgba(26, 26, 26, 0.4); stroke-width: 1.6; stroke-linecap: round; }
+.strip-screw:focus-visible { outline: 2px solid var(--charcoal); outline-offset: -6px; }
+.strip-plate {
+  display: none;
+  position: absolute;
+  right: 8px;
+  top: 100%;
+  z-index: 5;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--yellow);
+  border-top: 0;
+  border-radius: 0 0 0.35rem 0.35rem;
+  background: var(--charcoal);
+  color: var(--yellow);
+  font-size: 0.95rem;
+}
+.strip-plate.is-revealed { display: block; }
+@media (prefers-reduced-motion: reduce) { .strip-screw svg { transition: none; } }

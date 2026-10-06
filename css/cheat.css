@@ -1,0 +1,266 @@
+/* ==========================================================================
+   Secret Cheat Code Terminal — loaded on demand with js/cheat.js
+   ========================================================================== */
+
+html.cheat-open,
+html.cheat-open body { overflow: hidden; }
+
+.cheat {
+  --c-red: var(--red, #c41e2a);
+  --c-charcoal: var(--charcoal, #1a1a1a);
+  --c-yellow: var(--yellow, #ffc107);
+  --c-white: var(--off-white, #f5f5f0);
+  --c-dim: #8a8783;
+  --c-green: #3ddc84;
+  --c-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(10px, env(safe-area-inset-top, 0px)) 10px max(10px, env(safe-area-inset-bottom, 0px));
+  background: rgba(8, 8, 8, 0.95);
+  color: var(--c-white);
+  font-family: var(--c-mono);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  overscroll-behavior: contain;
+  animation: cheat-fade 0.25s ease-out;
+}
+.cheat *, .cheat *::before, .cheat *::after { box-sizing: border-box; }
+
+.cheat__frame {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #111;
+  border: 2px solid #3a3a3a;
+  border-radius: 10px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65), inset 0 0 60px rgba(255, 193, 7, 0.04);
+}
+/* faint scanlines */
+.cheat__frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 4px);
+}
+.cheat__frame.is-denied { border-color: var(--c-red); animation: cheat-shake 0.4s ease-in-out; }
+
+.cheat__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.25rem 0 0.8rem;
+  border-bottom: 1px solid #333;
+  background: repeating-linear-gradient(45deg, rgba(255, 193, 7, 0.09) 0 10px, transparent 10px 20px), var(--c-charcoal);
+}
+.cheat__leds { display: inline-flex; gap: 5px; }
+.cheat__leds i { width: 7px; height: 7px; border-radius: 50%; background: var(--c-red); box-shadow: 0 0 6px var(--c-red); }
+.cheat__leds i:nth-child(2) { background: var(--c-yellow); box-shadow: 0 0 6px var(--c-yellow); animation: cheat-blink 2.4s steps(1) infinite; }
+.cheat__leds i:nth-child(3) { background: var(--c-green); box-shadow: 0 0 6px var(--c-green); }
+.cheat__barname { flex: 1; min-width: 0; font-size: 0.7rem; letter-spacing: 0.14em; color: var(--c-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cheat__close {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #d8d6d2;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+.cheat__close:hover, .cheat__close:focus-visible { color: var(--c-yellow); background: rgba(255, 255, 255, 0.06); outline: none; }
+
+.cheat__stage { position: relative; padding: 1.1rem 1.1rem 1.4rem; }
+.cheat p { margin: 0; }
+.cheat-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.cheat__kicker { font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--c-yellow); }
+.cheat__kicker--ok { color: var(--c-green); }
+.cheat__title {
+  margin: 0.15rem 0 0.35rem;
+  font-family: var(--font-heading, var(--c-mono));
+  font-size: clamp(1.4rem, 6vw, 1.85rem);
+  line-height: 1.1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.cheat__title:focus { outline: none; }
+.cheat__status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; letter-spacing: 0.1em; color: var(--c-dim); }
+.cheat__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c-green); box-shadow: 0 0 6px var(--c-green); animation: cheat-blink 1.6s steps(1) infinite; }
+
+/* ---------- Boot ---------- */
+.cheat-boot { min-height: 9rem; font-size: 0.8rem; color: var(--c-yellow); overflow-wrap: anywhere; }
+.cheat-boot p:last-child::after { content: "█"; margin-left: 0.3em; animation: cheat-blink 0.9s steps(1) infinite; }
+
+/* ---------- Slots ---------- */
+.cheat-slots { list-style: none; margin: 0.9rem 0 1rem; padding: 0; display: grid; gap: 0.35rem; }
+.cheat-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #2e2e2e;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--c-dim);
+  font: inherit;
+  letter-spacing: 0.08em;
+  text-align: left;
+}
+.cheat-slot__n { width: 2ch; color: #d8d6d2; font-weight: 700; }
+button.cheat-slot { cursor: pointer; }
+.cheat-slot.is-auth { border-color: rgba(61, 220, 132, 0.4); background: rgba(61, 220, 132, 0.07); color: var(--c-green); }
+.cheat-slot.is-auth .cheat-slot__n { color: #fff; }
+button.cheat-slot:hover { background: rgba(61, 220, 132, 0.14); }
+button.cheat-slot:focus-visible { outline: 2px solid var(--c-yellow); outline-offset: 2px; }
+
+/* ---------- Code entry ---------- */
+.cheat-form { display: grid; gap: 0.5rem; }
+.cheat-form__label { font-size: 0.78rem; letter-spacing: 0.16em; color: var(--c-yellow); }
+.cheat-form__field { position: relative; overflow: hidden; border-radius: 6px; }
+.cheat-form__input {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  padding: 0.6rem 0.8rem;
+  border: 2px solid #444;
+  border-radius: 6px;
+  background: #080808;
+  color: var(--c-yellow);
+  caret-color: var(--c-yellow);
+  font-family: var(--c-mono);
+  font-size: 1.15rem; /* 16px+ so phones don't zoom on focus */
+  letter-spacing: 0.1em;
+}
+.cheat-form__input::placeholder { color: #555; }
+.cheat-form__input:focus { outline: none; border-color: var(--c-yellow); box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.18); }
+.cheat-form__scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, rgba(255, 193, 7, 0.4), transparent);
+  transform: translateX(-110%);
+  pointer-events: none;
+}
+.cheat-form.is-busy .cheat-form__scan { animation: cheat-scan 0.45s linear infinite; }
+
+.cheat-btn {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  padding: 0.7rem 1rem;
+  border: 2px solid var(--c-red);
+  border-radius: 6px;
+  background: var(--c-red);
+  color: #fff;
+  font-family: var(--font-heading, var(--c-mono));
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.cheat-btn:hover { background: var(--red-dark, #a11620); }
+.cheat-btn:active { transform: scale(0.98); }
+.cheat-btn:focus-visible { outline: 3px solid var(--c-yellow); outline-offset: 2px; }
+.cheat-btn:disabled { opacity: 0.55; cursor: wait; }
+.cheat-btn--ghost { margin-top: 1rem; background: transparent; border-color: #555; color: #d8d6d2; }
+.cheat-btn--ghost:hover { background: rgba(255, 255, 255, 0.06); border-color: var(--c-yellow); color: var(--c-yellow); }
+
+.cheat-msg { min-height: 3.2rem; margin-top: 0.7rem !important; font-size: 0.8rem; letter-spacing: 0.14em; text-align: center; color: var(--c-dim); }
+.cheat-msg.is-denied { color: #ff6b76; }
+.cheat-msg b { display: block; font-family: var(--font-heading, var(--c-mono)); font-size: 1.35rem; letter-spacing: 0.12em; color: var(--c-red); text-shadow: 0 0 14px rgba(196, 30, 42, 0.7); }
+
+/* ---------- Records ---------- */
+.cheat-record { text-align: center; }
+.cheat-record.is-fresh > * { animation: cheat-rise 0.45s ease-out both; }
+.cheat-record.is-fresh > :nth-child(2) { animation-delay: 0.08s; }
+.cheat-record.is-fresh > :nth-child(3) { animation-delay: 0.2s; }
+.cheat-record.is-fresh > :nth-child(n+4) { animation-delay: 0.32s; }
+
+.cheat-reward {
+  margin-top: 0.8rem;
+  padding: 1.1rem 0.9rem;
+  border: 2px dashed var(--c-yellow);
+  border-radius: 10px;
+  background: linear-gradient(160deg, #241a00, var(--c-charcoal) 60%);
+}
+.cheat-reward__label { font-size: 0.78rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--c-yellow); }
+.cheat-reward__pct { font-family: var(--font-heading, var(--c-mono)); font-size: clamp(2.6rem, 14vw, 3.6rem); font-weight: 700; line-height: 1.05; color: #fff; }
+.cheat-reward__brand { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--c-dim); }
+.cheat-reward__terms { list-style: none; margin: 0.9rem 0; padding: 0.7rem 0; border-top: 1px solid #3a3a3a; border-bottom: 1px solid #3a3a3a; font-family: var(--font-body, sans-serif); font-size: 0.9rem; color: #d8d6d2; }
+.cheat-reward__terms li { margin: 0.15rem 0; }
+.cheat-reward__reflabel { font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--c-dim); }
+.cheat-reward__ref { font-size: clamp(1.1rem, 5.5vw, 1.4rem); font-weight: 700; letter-spacing: 0.08em; color: var(--c-yellow); overflow-wrap: anywhere; user-select: all; }
+.cheat-reward__issued { margin-top: 0.4rem !important; font-size: 0.72rem; color: var(--c-dim); }
+.cheat-note { margin-top: 0.7rem !important; font-family: var(--font-body, sans-serif); font-size: 0.85rem; color: var(--c-dim); }
+
+.cheat-file {
+  margin-top: 0.8rem;
+  padding: 1.1rem 0.9rem;
+  border: 1px solid #444;
+  border-left: 4px solid var(--c-red);
+  border-radius: 6px;
+  background: #0b0b0b;
+  text-align: left;
+}
+.cheat-file p + p { margin-top: 0.6rem; }
+.cheat-file__stamp {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border: 2px solid var(--c-red);
+  border-radius: 3px;
+  color: #ff6b76;
+  font-family: var(--font-heading, var(--c-mono));
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transform: rotate(-1.5deg);
+}
+.cheat-file__value {
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--c-yellow);
+  border-radius: 4px;
+  background: rgba(255, 193, 7, 0.07);
+  color: var(--c-yellow);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+.cheat-file__sign { color: var(--c-dim); text-align: right; letter-spacing: 0.12em; }
+
+@keyframes cheat-fade  { from { opacity: 0; } }
+@keyframes cheat-blink { 50% { opacity: 0.2; } }
+@keyframes cheat-scan  { to { transform: translateX(440%); } }
+@keyframes cheat-rise  { from { opacity: 0; transform: translateY(10px); } }
+@keyframes cheat-shake {
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cheat, .cheat *, .cheat *::before, .cheat *::after { animation: none !important; transition: none !important; }
+}
+
+@media (max-width: 420px) {
+  .cheat__stage { padding: 1rem 0.8rem 1.2rem; }
+  .cheat-slot { gap: 0.6rem; letter-spacing: 0.05em; }
+}
