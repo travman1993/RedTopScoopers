@@ -24,6 +24,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/countdown.css"><!-- launch countdown -->
 
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-PLDDZRXMS9"></script>
@@ -109,6 +110,38 @@
       <span>💪 We Do All the Lifting</span>
     </div>
   </div>
+
+  <!-- LAUNCH COUNTDOWN START — remove this block + css/countdown.css + js/countdown.js to take it down -->
+  <section class="launch" aria-labelledby="launch-title"
+           data-launch-countdown
+           data-launch-date="2027-01-01T00:00:00"
+           data-launch-tz="America/New_York">
+    <div class="container">
+      <div class="launch__panel">
+        <div data-launch-pre>
+          <span class="eyebrow eyebrow--light">Mark Your Calendar</span>
+          <h2 class="launch__brand" id="launch-title">Red Top Scoopers Junk Removal</h2>
+          <p class="launch__date">Official Launch — January 1, 2027</p>
+          <div class="launch__clock" role="timer" aria-hidden="true">
+            <div class="launch__unit"><div class="flip" data-unit="days">00</div><span class="launch__label">Days</span></div>
+            <span class="launch__sep">:</span>
+            <div class="launch__unit"><div class="flip" data-unit="hours">00</div><span class="launch__label">Hours</span></div>
+            <span class="launch__sep">:</span>
+            <div class="launch__unit"><div class="flip" data-unit="minutes">00</div><span class="launch__label">Minutes</span></div>
+            <span class="launch__sep">:</span>
+            <div class="launch__unit"><div class="flip" data-unit="seconds">00</div><span class="launch__label">Seconds</span></div>
+          </div>
+          <p class="launch__note">* Our launch date could come sooner — any change will be reflected in this countdown.</p>
+          <p class="launch__sr" data-launch-sr></p>
+        </div>
+        <div data-launch-open hidden>
+          <h2 class="launch__open-title"><span>🚛</span> We're Officially Open!</h2>
+          <p class="launch__open-text">Red Top Scoopers Junk Removal is now serving our community.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- LAUNCH COUNTDOWN END -->
 
   <section class="section">
     <div class="container">
@@ -273,9 +306,11 @@
     </div>
     <div class="footer-bottom">
       <p>&copy; <span data-current-year>2026</span> Red Top Scoopers LLC. All rights reserved. Licensed &amp; Insured.</p>
+      <button type="button" class="restricted-tag" data-egg-trigger><span class="restricted-tag__led" aria-hidden="true"></span>🔒 Restricted Area</button>
       <p>Junk Removal proudly serving Cartersville, GA and beyond.</p>
     </div>
   </div>
+  <script src="js/egg-loader.js" defer></script>
 </footer>
 
 <div class="sticky-cta">
@@ -286,5 +321,6 @@
 </div>
 
 <script src="js/main.js"></script>
+<script src="js/countdown.js"></script><!-- launch countdown -->
 </body>
 </html>

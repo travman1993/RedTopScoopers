@@ -217,9 +217,11 @@ def footer(prefix):
     </div>
     <div class="footer-bottom">
       <p>&copy; <span data-current-year>{date.today().year}</span> Red Top Scoopers LLC. All rights reserved. Licensed &amp; Insured.</p>
+      <button type="button" class="restricted-tag" data-egg-trigger><span class="restricted-tag__led" aria-hidden="true"></span>🔒 Restricted Area</button>
       <p>Junk Removal proudly serving Cartersville, GA and beyond.</p>
     </div>
   </div>
+  <script src="{prefix}js/egg-loader.js" defer></script>
 </footer>"""
 
 

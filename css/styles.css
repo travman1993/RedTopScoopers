@@ -646,3 +646,34 @@ a:hover { color: var(--red-dark); }
   .hero { padding: 3rem 0 2.5rem; }
   .section { padding: 2.75rem 0; }
 }
+
+/* ---------- Footer "Restricted Area" tag (opens the landfill Easter egg, js/egg-loader.js) ---------- */
+.restricted-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 32px;
+  padding: 0.25rem 0.65rem;
+  border: 1px dashed rgba(255, 193, 7, 0.28);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--gray-500);
+  font-family: var(--font-heading);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.restricted-tag:hover,
+.restricted-tag:focus-visible { color: var(--yellow); border-color: var(--yellow); outline: none; }
+.restricted-tag__led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red);
+  animation: restricted-blink 4s infinite;
+}
+@keyframes restricted-blink { 0%, 88%, 100% { opacity: 0.35; } 92%, 96% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .restricted-tag__led { animation: none; opacity: 0.8; } }

@@ -55,6 +55,23 @@ hand-written top-level pages, and fails if any internal link is broken.
 - **Sitemap dates:** `tools/page-dates.json` remembers each page's content hash,
   so a page's `lastmod` only changes when its content actually changes. Commit it.
 
+## Landfill Easter egg
+
+A hidden mini-adventure opens from the small "🔒 Restricted Area" tag in every
+page's footer: gate lock → security panel → 10-second wire puzzle → control
+room → 4-stage Cleanup Challenge that awards a 5/10/15/20% code.
+
+- `js/egg-loader.js`: tiny loader in the footer. It downloads the game only on
+  click (or when a URL ends in `#restricted`).
+- `js/egg.js` + `css/egg.css`: the whole game. Discount terms, code prefixes,
+  stage difficulty, riddles and lock clues are in the CONFIG block at the top of `egg.js`.
+- `tools/verify_code.py CODE`: checks a customer's code and tells you which
+  discount it was issued for. It catches edited screenshots, but it isn't real
+  security (it's all frontend).
+- localStorage key `rts-landfill-v1`: remembers the control-room unlock and the last code.
+- To remove it: delete the `restricted-tag` button and `egg-loader.js` script
+  from `footer()` in `tools/build_pages.py`, rebuild, and delete the files above.
+
 ## Previewing locally
 
 No install needed. Either:

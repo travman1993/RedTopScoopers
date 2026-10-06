@@ -1,0 +1,252 @@
+/* ==========================================================================
+   Official Launch Countdown (homepage)
+   Self-contained: remove this file, js/countdown.js, and the
+   LAUNCH COUNTDOWN block in index.html to take it off the site.
+   ========================================================================== */
+
+.launch {
+  padding: 3.5rem 0;
+}
+
+.launch__panel {
+  background: var(--charcoal);
+  border-top: 4px solid var(--red);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  color: var(--off-white);
+  text-align: center;
+  padding: 2.5rem 1.5rem 2.75rem;
+  position: relative;
+  overflow: hidden;
+}
+
+/* faint red glow behind the clock */
+.launch__panel::before {
+  content: "";
+  position: absolute;
+  inset: auto -20% -60% -20%;
+  height: 80%;
+  background: radial-gradient(ellipse at center, rgba(196, 30, 42, 0.22), transparent 70%);
+  pointer-events: none;
+}
+
+.launch__panel > * { position: relative; }
+
+.launch__brand {
+  color: #fff;
+  font-size: clamp(1.35rem, 3.6vw, 2.1rem);
+  margin-bottom: 0.6rem;
+}
+
+.launch__date {
+  display: inline-block;
+  background: var(--red);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: clamp(0.85rem, 2.2vw, 1.05rem);
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  margin: 0 0 2rem;
+}
+
+/* ---------- Clock layout ---------- */
+.launch__clock {
+  --card-h: 1.45em;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.18em;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(2rem, 8.5vw, 5.25rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  visibility: hidden; /* shown once JS has filled in real values */
+}
+.launch.is-ready .launch__clock { visibility: visible; }
+
+.launch__unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.launch__sep {
+  height: var(--card-h);
+  display: flex;
+  align-items: center;
+  color: var(--red);
+  font-size: 0.7em;
+  padding-bottom: 0.08em;
+}
+
+.launch__label {
+  margin-top: 0.7rem;
+  font-family: var(--font-heading);
+  font-size: clamp(0.65rem, 1.6vw, 0.85rem);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gray-300);
+}
+
+/* ---------- Flip card ---------- */
+.flip {
+  position: relative;
+  height: var(--card-h);
+  min-width: 1.75em;
+  padding: 0 0.14em;
+  border-radius: 0.1em;
+  perspective: 6em;
+  color: var(--off-white);
+  box-shadow:
+    0 0.06em 0 rgba(0, 0, 0, 0.6),
+    0 0.12em 0.3em rgba(0, 0, 0, 0.45);
+}
+
+/* invisible copy of the value: gives the card its width (2 or 3 digits) */
+.flip__sizer {
+  visibility: hidden;
+  display: block;
+  line-height: var(--card-h);
+}
+
+.flip__half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flip__half > span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 200%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flip__half--top {
+  top: 0;
+  border-radius: 0.1em 0.1em 0 0;
+  background: linear-gradient(180deg, #343434 0%, #2b2b2b 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.flip__half--top > span { top: 0; }
+
+.flip__half--bottom {
+  bottom: 0;
+  border-radius: 0 0 0.1em 0.1em;
+  background: linear-gradient(180deg, #232323 0%, #1f1f1f 100%);
+}
+.flip__half--bottom > span { bottom: 0; }
+
+/* center seam + hinge pins */
+.flip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0.04em;
+  min-height: 2px;
+  transform: translateY(-50%);
+  background: #0d0d0d;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+  z-index: 4;
+}
+.flip::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -0.05em;
+  right: -0.05em;
+  height: 0.16em;
+  transform: translateY(-50%);
+  background:
+    radial-gradient(circle at 0.05em 50%, #555 0 0.045em, transparent 0.05em) left / 0.12em 100% no-repeat,
+    radial-gradient(circle at calc(100% - 0.05em) 50%, #555 0 0.045em, transparent 0.05em) right / 0.12em 100% no-repeat;
+  z-index: 5;
+}
+
+/* ---------- Flip animation ---------- */
+/* Old top half falls forward, then new bottom half lands. */
+.flip__half--flap { z-index: 3; }
+
+.flip__half--flap.flip__half--top {
+  transform-origin: 50% 100%;
+  animation: flip-top 0.28s cubic-bezier(0.55, 0, 0.9, 0.4) forwards;
+}
+.flip__half--flap.flip__half--bottom {
+  transform-origin: 50% 0%;
+  transform: rotateX(90deg);
+  animation: flip-bottom 0.32s cubic-bezier(0.2, 0.7, 0.35, 1.25) 0.28s forwards;
+}
+
+/* shading so the flap darkens as it turns away from the light */
+.flip__half--flap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+}
+.flip__half--flap.flip__half--top::after { opacity: 0; animation: shade-in 0.28s ease-in forwards; }
+.flip__half--flap.flip__half--bottom::after { opacity: 0.45; animation: shade-out 0.32s ease-out 0.28s forwards; }
+
+@keyframes flip-top    { to   { transform: rotateX(-90deg); } }
+@keyframes flip-bottom { from { transform: rotateX(90deg); } to { transform: rotateX(0deg); } }
+@keyframes shade-in    { to   { opacity: 0.5; } }
+@keyframes shade-out   { to   { opacity: 0; } }
+
+/* Small disclaimer under the clock. A lighter tint of the brand red so it stays
+   readable on charcoal (#c41e2a itself is too dark for small text here). */
+.launch__note {
+  margin: 1.75rem auto 0;
+  max-width: 42rem;
+  color: #ef4450;
+  text-wrap: balance;
+  font-size: clamp(0.85rem, 2vw, 0.95rem);
+  font-weight: 600;
+}
+
+/* ---------- Launched state ---------- */
+.launch__open-title {
+  color: #fff;
+  font-size: clamp(1.75rem, 5.5vw, 3.25rem);
+  margin-bottom: 0.5rem;
+}
+.launch__open-title span { color: var(--yellow); }
+.launch__open-text {
+  color: var(--gray-300);
+  font-size: clamp(1rem, 2.4vw, 1.25rem);
+  margin: 0;
+}
+
+.launch__sr {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 600px) {
+  .launch { padding: 2.5rem 0; }
+  .launch__panel { padding: 2rem 0.75rem 2.25rem; }
+  .launch__date { margin-bottom: 1.5rem; }
+  .launch__label { letter-spacing: 0.12em; margin-top: 0.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flip__half--flap { display: none; }
+}
