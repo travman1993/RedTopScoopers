@@ -86,7 +86,7 @@ build command empty — it will serve the files as-is.
 ## Analytics
 
 Google Analytics (GA4) is wired up via the same measurement ID as before
-(`G-WDX10BYQMS`), loaded via `gtag.js` in the `<head>` of every page — no changes
+(`G-PLDDZRXMS9`), loaded via `gtag.js` in the `<head>` of every page — no changes
 needed to keep existing tracking history intact.
 
 ## Brand
