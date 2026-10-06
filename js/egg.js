@@ -28,10 +28,10 @@
       title: '🏆 Stage 1 Complete', blurb: 'Big junk, plenty of time. Warm up.' },
     { n: 2, pct: 10, time: 35, target: 350, initial: 4, spawn: [550, 1000],              size: [46, 62], pts: [5, 15],  max: 18, bonus: 0.03,
       title: '🔥 Stage 2 Complete', blurb: 'Smaller junk, faster piles, less time.' },
-    { n: 3, pct: 15, time: 25, target: 300, initial: 3, spawn: [330, 650],               size: [34, 48], pts: [4, 11],  max: 22, bonus: 0.04,
+    { n: 3, pct: 15, time: 25, target: 375, initial: 3, spawn: [330, 650],               size: [34, 48], pts: [4, 11],  max: 22, bonus: 0.04,
       life: [1800, 3200], lifeChance: 0.45, edges: true,
       title: '💀 Stage 3 Complete', blurb: 'Some junk vanishes if you wait. It pops up anywhere.' },
-    { n: 4, pct: 20, time: 15, target: 200, initial: 5, spawn: [380, 560], spawnEnd: [110, 200], size: [26, 40], pts: [3, 8], max: 30, bonus: 0.05,
+    { n: 4, pct: 20, time: 15, target: 400, initial: 5, spawn: [380, 560], spawnEnd: [110, 200], size: [26, 40], pts: [3, 8], max: 30, bonus: 0.05,
       life: [1200, 2400], lifeChance: 0.55, edges: true, overlap: true, frenzy: true,
       title: '🏆 Jackpot', blurb: 'Fifteen seconds of pure chaos. It only gets faster.' }
   ];
