@@ -113,3 +113,49 @@ document.addEventListener('DOMContentLoaded', function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
+
+/* Impossible Run: opens from any [data-impossible-entrance] element, or a URL
+ * ending in #impossible. js/impossible.js decides whether the visitor is allowed
+ * in. Its files only download when the entrance is used. */
+(function () {
+  var me = document.currentScript;
+  var base = me ? me.src.replace(/js\/main\.js(\?.*)?$/, '') : '';
+  var loading = null;
+
+  function open(trigger) {
+    if (!loading) {
+      loading = new Promise(function (resolve, reject) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = base + 'css/impossible.css';
+        link.onload = link.onerror = function () {
+          var s = document.createElement('script');
+          s.src = base + 'js/impossible.js';
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        };
+        document.head.appendChild(link);
+      });
+      loading.catch(function () { loading = null; });
+    }
+    loading.then(function () { if (window.RTSImpossible) window.RTSImpossible.open(trigger); }, function () {});
+  }
+
+  // The entrance is in the page but hidden. It only appears once Cheat Terminal
+  // code #6 has been authenticated in this browser.
+  function reveal() {
+    var done = false;
+    try { var t = JSON.parse(localStorage.getItem('rts-cheat-terminal-v1')) || {}; done = !!(t.auth && t.auth[6]); } catch (e) { /* no storage */ }
+    if (!done) return;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-impossible-entrance][hidden]'), function (el) { el.hidden = false; });
+  }
+  reveal();
+  document.addEventListener('rts:terminal-complete', reveal);
+
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('[data-impossible-entrance]');
+    if (t) open(t);
+  });
+  if (location.hash === '#impossible') open(null);
+})();

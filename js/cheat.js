@@ -25,7 +25,8 @@
   //   #1 home page, "Load Ticket" tag under "Local, Reliable, Upfront"
   //   #2 about.html, the word "junk" in the Our Story paragraph
   //   #3 home page, screw at the right end of the yellow trust strip (3 taps)
-  //   #4 and #5 are not placed yet (waiting on the Impossible Run location).
+  //   #4 service-locations.html, blank pill at the end of the Bartow County town list
+  //   #5 faq.html, the question mark of "Are you licensed and insured?"
   var CODES = {
     1: '#eywQGrfFXJ',
     2: '#nxShNfCX',
@@ -49,11 +50,18 @@
   };
   var REDEEM_PHONE = '404-649-4654';
 
-  // Impossible Run placeholders. The Impossible Run itself is not built yet;
-  // replace these three values once its page, section and entrance are decided.
-  var IMPOSSIBLE_EGG_PAGE = 'PLACEHOLDER';          // shown by code 4
-  var IMPOSSIBLE_EGG_SECTION = 'PLACEHOLDER';       // shown by code 5
-  var IMPOSSIBLE_EGG_LOCATION_CLUE = 'PLACEHOLDER'; // shown by code 6
+  // Where the Impossible Run entrance is (the faded marker on the contact page
+  // map). Code 6 spells these three out; codes 4 and 5 only hint at them.
+  var IMPOSSIBLE_EGG_PAGE = 'CONTACT';
+  var IMPOSSIBLE_EGG_SECTION = 'BODY';
+  var IMPOSSIBLE_EGG_LOCATION_CLUE = 'THE MAP';
+
+  // Treasure-hunt wording. Each entry is the lines shown for that step.
+  var CLUE_AFTER_FIRST_THREE = 'Check your service area.'; // on the terminal once codes 1-3 are in; points at code 4
+  var CLUE_CODE_4 = ['The impossible cannot be found.', 'It has to be contacted.', 'Before you reach out, check your FAQ.']; // game is on Contact, code 5 is on FAQ
+  var CLUE_CODE_5 = ['Only in the body of the page will it be summoned.'];
+  var CLUE_CODE_6 = ['Map your course to the gate of the impossible.'];
+  var CLUE_CODE_6_AFTER = 'Something faded is waiting there. Press it.';
 
   // ======================================================================
   // Helpers
@@ -206,9 +214,11 @@
       '<p class="cheat__kicker">Sealed Records</p>' +
       '<h2 class="cheat__title">Cheat Code Terminal</h2>' +
       '<p class="cheat__status"><span class="cheat__dot" aria-hidden="true"></span>SYSTEM ONLINE · ' + count + ' / 6 AUTHENTICATED</p>' +
+      (done[1] && done[2] && done[3] && !done[4] ? '<p class="cheat__incoming"><b>Incoming transmission</b>' + esc(CLUE_AFTER_FIRST_THREE) + '</p>' : '') +
       '<ol class="cheat-slots">' + SLOTS.map(function (n) { return slotRow(n, done); }).join('') + '</ol>' +
       '<form class="cheat-form" novalidate>' +
-        '<label class="cheat-form__label" for="cheat-code">ENTER CODE:</label>' +
+        // Once codes 1-5 are in, the label itself becomes the last clue.
+        '<label class="cheat-form__label" for="cheat-code">' + (done[1] && done[2] && done[3] && done[4] && done[5] ? '#' : '') + 'ENTER CODE:</label>' +
         '<div class="cheat-form__field"><input id="cheat-code" class="cheat-form__input" type="text" name="code" maxlength="40" placeholder="#" ' +
           'autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-describedby="cheat-msg">' +
           '<span class="cheat-form__scan" aria-hidden="true"></span></div>' +
@@ -257,6 +267,8 @@
       var rec = { at: Date.now() };
       if (REWARD_PERCENT[n]) rec.ref = refId(n);
       saveAuth(n, rec);
+      // Lets the page reveal the Impossible Run entrance without a reload (see js/main.js).
+      if (n === 6) document.dispatchEvent(new CustomEvent('rts:terminal-complete'));
     }
     record(n, fresh);
   }
@@ -296,14 +308,12 @@
       body = clue('Classified Message',
         ['There is another secret hidden on this website.', 'Look near the footer of the page.'], null, null, '— SYSTEM 03');
     } else if (n === 4) {
-      body = clue('Classified Location Data',
-        ['The hardest challenge on this website is hidden on:'], IMPOSSIBLE_EGG_PAGE, 'Find the page.');
+      body = clue('Classified Location Data', CLUE_CODE_4.map(esc));
     } else if (n === 5) {
-      body = clue('Secondary Location Data',
-        ['You&#39;re on the correct page.', 'Now search the section:'], IMPOSSIBLE_EGG_SECTION, 'You&#39;re getting closer.');
+      body = clue('Secondary Location Data', CLUE_CODE_5.map(esc));
     } else {
-      body = clue('Final Location Data Decrypted',
-        ['You found the final key.', 'The entrance is hidden here:'], IMPOSSIBLE_EGG_LOCATION_CLUE);
+      body = clue('Final Location Data Decrypted', CLUE_CODE_6.map(esc),
+        'PAGE: ' + IMPOSSIBLE_EGG_PAGE + '\nSECTION: ' + IMPOSSIBLE_EGG_SECTION + '\nLOCATION: ' + IMPOSSIBLE_EGG_LOCATION_CLUE, esc(CLUE_CODE_6_AFTER));
     }
 
     render(

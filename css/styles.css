@@ -754,3 +754,55 @@ a:hover { color: var(--red-dark); }
 }
 .strip-plate.is-revealed { display: block; }
 @media (prefers-reduced-motion: reduce) { .strip-screw svg { transition: none; } }
+
+/* ---------- Hiding spot for code #4: the redacted town pill ---------- */
+.town-pill-list li.town-redacted { padding: 0; background: var(--gray-100); border-style: dashed; }
+.town-redacted button {
+  min-height: 2.2rem;
+  padding: 0.45rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  cursor: default;
+}
+.town-redacted__bar { display: block; width: 4.6em; height: 0.75em; border-radius: 2px; background: var(--gray-300); }
+.town-redacted .is-revealed .town-redacted__bar { display: none; }
+.town-redacted__out { color: var(--red); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 700; letter-spacing: 0.06em; }
+.town-redacted button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
+/* ---------- Impossible Run entrance (js/impossible.js): faded marker on the contact map.
+   Stays hidden until Cheat Terminal code #6 is authenticated (see the last block in js/main.js). ---------- */
+.map-embed { position: relative; }
+.map-gate {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.map-gate[hidden] { display: none; }
+.map-gate::before {
+  content: "";
+  position: absolute;
+  inset: 13px;
+  border: 2px solid var(--charcoal);
+  background: repeating-linear-gradient(45deg, var(--yellow) 0 4px, var(--charcoal) 4px 8px);
+  animation: map-gate-fade 3.2s ease-in-out infinite;
+}
+.map-gate:hover, .map-gate:focus-visible { opacity: 0.9; outline: none; }
+.map-gate:focus-visible::before { outline: 2px solid var(--red); outline-offset: 3px; }
+@keyframes map-gate-fade { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .map-gate::before { animation: none; } }
+.faq-item .secret-word.is-revealed { margin-left: 0.35em; }
+
+/* Yellow ring on the footer logo (the Cheat Code Terminal trigger) */
+.site-footer .brand__logo { box-shadow: 0 0 0 3px var(--yellow); }

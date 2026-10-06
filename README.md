@@ -86,12 +86,36 @@ accepts six codes: #1 and #2 unlock 5% and 10% rewards, #3 to #5 are clues, and
 - Codes #1 to #3 are hidden on the site as `data-rts-secret="N"` buttons, which
   pull the code text from `cheat.js` when found: #1 is the "Load Ticket" tag on
   the home page, #2 is the word "junk" in the Our Story paragraph on
-  `about.html`, #3 is the screw on the home page's yellow strip (three taps).
-  #4 and #5 aren't placed yet.
+  `about.html`, #3 is the screw on the home page's yellow strip (three taps),
+  #4 is the blank pill ending the Bartow County town list on
+  `service-locations.html`, #5 is the question mark of the last question on
+  `faq.html`.
+- Clue wording (including where the Impossible Run is) is in the same CONFIG block.
 - localStorage key `rts-cheat-terminal-v1`: remembers authenticated codes and reward IDs.
 - The codes are readable in `cheat.js` and reward IDs can't be checked by
   `tools/verify_code.py`. It's for fun, not security.
 - To remove it: delete that block from `js/main.js` and the two files above.
+
+## Impossible Run
+
+The third hidden Easter egg: seven very hard stages with no checkpoints, ending
+in a personalised certificate. Separate from the landfill game and the terminal.
+
+- `js/impossible.js` + `css/impossible.css`: the whole game. Location notes,
+  the reward name and every difficulty number are in `IMPOSSIBLE_RUN_CONFIG` at
+  the top of `impossible.js`.
+- Entrance: any element with `data-impossible-entrance`. That is the faded
+  striped square at the centre of the map on `contact.html`. It is hidden until
+  Cheat Terminal code #6 has been authenticated in the same browser. The hook
+  is the last block in `js/main.js`; a URL ending in `#impossible` also opens it.
+- `requireFinalCode: true` means the game itself also refuses to open without
+  code #6.
+- localStorage key `rts-impossible-run-v1`: attempts, best stage, completed runs
+  and the certificate. Stage progress is never saved.
+- One-per-address redemption is not enforced by the site. Check the certificate
+  by hand, or set `recordEndpoint` and build a backend (see `recordCompletion`).
+- To remove it: delete the entrance button, that block in `js/main.js`, and the
+  two files above.
 
 ## Previewing locally
 

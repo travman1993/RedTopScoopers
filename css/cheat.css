@@ -97,6 +97,9 @@ html.cheat-open body { overflow: hidden; }
 .cheat__status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; letter-spacing: 0.1em; color: var(--c-dim); }
 .cheat__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c-green); box-shadow: 0 0 6px var(--c-green); animation: cheat-blink 1.6s steps(1) infinite; }
 
+.cheat__incoming { margin-top: 0.7rem !important; padding: 0.55rem 0.75rem; border: 1px dashed var(--c-yellow); border-radius: 6px; background: rgba(255, 193, 7, 0.07); color: var(--c-yellow); }
+.cheat__incoming b { display: block; font-size: 0.66rem; font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase; color: var(--c-dim); }
+
 /* ---------- Boot ---------- */
 .cheat-boot { min-height: 9rem; font-size: 0.8rem; color: var(--c-yellow); overflow-wrap: anywhere; }
 .cheat-boot p:last-child::after { content: "█"; margin-left: 0.3em; animation: cheat-blink 0.9s steps(1) infinite; }
@@ -242,6 +245,7 @@ button.cheat-slot:focus-visible { outline: 2px solid var(--c-yellow); outline-of
   font-weight: 700;
   letter-spacing: 0.06em;
   overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 .cheat-file__sign { color: var(--c-dim); text-align: right; letter-spacing: 0.12em; }
 
